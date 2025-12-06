@@ -13,47 +13,55 @@ jobs:
     - name: Check out repository
       uses: actions/checkout@v4
       
-    - name: Setup Git
-      run: |
-        git config --global user.name "GitHub Actions"
-        git config --global user.email "actions@github.com"
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
         
-    - name: Clone HuggingFace Space
+    - name: Install Hugging Face Hub
+      run: |
+        pip install huggingface_hub
+        
+    - name: Deploy to HuggingFace Spaces
       env:
         HF_TOKEN: ${{ secrets.HUGGINGPUP }}
       run: |
+        echo "🐕 Deploying Alberto to HuggingFace Spaces..."
+        
+        # Debug token presence
         if [ -z "$HF_TOKEN" ]; then
           echo "❌ HUGGINGPUP secret not found"
+          echo "Available secrets:"
+          printenv | grep -i hug
           exit 1
         fi
         
         echo "✅ Found HUGGINGPUP token (length: ${#HF_TOKEN})"
+        echo "Token starts with: ${HF_TOKEN:0:10}..."
         
-        # Clone the Space
-        git clone https://huggingface.co/spaces/AlbertoRoca96-web/pup-sdk.git hf-space
-        
-        # Configure the remote with token
-        cd hf-space
-        git remote set-url origin https://${HF_TOKEN}@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk.git
-        
-    - name: Copy files to HuggingFace Space
-      run: |
-        # Copy all source files to the HuggingFace Space repo
-        cp app.py Dockerfile requirements.txt README.md hf-space/
-        
-    - name: Commit and push to HuggingFace
-      run: |
-        cd hf-space
-        git add .
-        git commit -m "🐕 Auto-deploy Alberto mobile interface [skip ci]"
-        git push origin main
+        # Try the official hf upload method
+        python -c "
+import os
+from huggingface_hub import HfApi
+api = HfApi(token=os.environ.get('HF_TOKEN'))
+try:
+    # Upload files
+    api.upload_folder(
+        folder_path='.',
+        repo_id='AlbertoRoca96-web/pup-sdk',
+        repo_type='space',
+        commit_message='🐕 Auto-deploy Alberto mobile interface'
+    )
+    print('🎉 SUCCESS! Alberto deployed to HuggingFace Spaces!')
+    print('🌐 Space URL: https://huggingface.co/spaces/AlbertoRoca96-web/pup-sdk')
+except Exception as e:
+    print(f'❌ Upload failed: {e}')
+    exit(1)
+"
         
         if [ $? -eq 0 ]; then
-          echo "🎉 SUCCESS! Alberto deployed to HuggingFace Spaces!"
-          echo "🌐 Space URL: https://huggingface.co/spaces/AlbertoRoca96-web/pup-sdk"
-          echo "⏱️ Build starting now... wait 2-5 minutes"
-          echo "📱 Alberto will be live on mobile soon!"
+          echo "✅ Deployment completed successfully!"
         else
-          echo "❌ Deployment failed during git push!"
+          echo "❌ Deployment failed!"
           exit 1
         fi
