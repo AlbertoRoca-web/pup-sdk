@@ -27,20 +27,26 @@ jobs:
           exit 1
         fi
         
-        echo "✅ Found HUGGINGPUP token"
-        git clone https://${HF_TOKEN}@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk.git hf-space
+        echo "✅ Found HUGGINGPUP token (length: ${#HF_TOKEN})"
+        
+        # Clone the Space
+        git clone https://huggingface.co/spaces/AlbertoRoca96-web/pup-sdk.git hf-space
+        
+        # Configure the remote with token
+        cd hf-space
+        git remote set-url origin https://${HF_TOKEN}@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk.git
         
     - name: Copy files to HuggingFace Space
       run: |
         # Copy all source files to the HuggingFace Space repo
-        cp -r app.py Dockerfile requirements.txt README.md hf-space/
+        cp app.py Dockerfile requirements.txt README.md hf-space/
         
     - name: Commit and push to HuggingFace
       run: |
         cd hf-space
         git add .
         git commit -m "🐕 Auto-deploy Alberto mobile interface [skip ci]"
-        git push
+        git push origin main
         
         if [ $? -eq 0 ]; then
           echo "🎉 SUCCESS! Alberto deployed to HuggingFace Spaces!"
@@ -48,6 +54,6 @@ jobs:
           echo "⏱️ Build starting now... wait 2-5 minutes"
           echo "📱 Alberto will be live on mobile soon!"
         else
-          echo "❌ Deployment failed!"
+          echo "❌ Deployment failed during git push!"
           exit 1
         fi
