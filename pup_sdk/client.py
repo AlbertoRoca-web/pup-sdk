@@ -364,14 +364,18 @@ class PupClient:
         syn_key = os.environ.get("SYN_API_KEY")
         openai_key = os.environ.get("OPENAI_API_KEY")
         
-        if syn_key:
+        # Check for valid keys (not empty strings)
+        has_syn_key = syn_key and syn_key.strip()
+        has_openai_key = openai_key and openai_key.strip()
+        
+        if has_syn_key:
             return cls(
                 base_url=base_url,
                 api_key=syn_key,
                 timeout=timeout,
                 demo_mode=False
             )
-        elif openai_key:
+        elif has_openai_key:
             return cls(
                 base_url=base_url,
                 api_key=openai_key,
