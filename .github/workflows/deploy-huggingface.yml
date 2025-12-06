@@ -10,58 +10,58 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Check out repository
+    - name: Checkout
       uses: actions/checkout@v4
-      
-    - name: Setup Python
-      uses: actions/setup-python@v4
       with:
-        python-version: '3.9'
+        fetch-depth: 0
         
-    - name: Install Hugging Face Hub
+    - name: Setup git
       run: |
-        pip install huggingface_hub
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
         
-    - name: Deploy to HuggingFace Spaces
+    - name: Checkout HF Space
       env:
         HF_TOKEN: ${{ secrets.HUGGINGPUP }}
       run: |
-        echo "🐕 Deploying Alberto to HuggingFace Spaces..."
+        git clone https://$HF_TOKEN@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk
         
-        # Debug token presence
-        if [ -z "$HF_TOKEN" ]; then
-          echo "❌ HUGGINGPUP secret not found"
-          echo "Available secrets:"
-          printenv | grep -i hug
-          exit 1
+    - name: Sync files
+      run: |
+        # Delete existing git repo to avoid conflicts
+        rm -rf AlbertoRoca96-web-pup-sdk/.git
+        
+        # Copy deployment files
+        cp app.py Dockerfile requirements.txt README.md AlbertoRoca96-web-pup-sdk/
+        
+        # Copy any additional needed files
+        if [ -d "pup_sdk" ]; then
+            cp -r pup_sdk AlbertoRoca96-web-pup-sdk/ || true
         fi
         
-        echo "✅ Found HUGGINGPUP token (length: ${#HF_TOKEN})"
-        echo "Token starts with: ${HF_TOKEN:0:10}..."
+    - name: Commit and push
+      env:
+        HF_TOKEN: ${{ secrets.HUGGINGPUP }}
+      run: |
+        cd AlbertoRoca96-web-pup-sdk
         
-        # Try the official hf upload method
-        python -c "
-import os
-from huggingface_hub import HfApi
-api = HfApi(token=os.environ.get('HF_TOKEN'))
-try:
-    # Upload files
-    api.upload_folder(
-        folder_path='.',
-        repo_id='AlbertoRoca96-web/pup-sdk',
-        repo_type='space',
-        commit_message='🐕 Auto-deploy Alberto mobile interface'
-    )
-    print('🎉 SUCCESS! Alberto deployed to HuggingFace Spaces!')
-    print('🌐 Space URL: https://huggingface.co/spaces/AlbertoRoca96-web/pup-sdk')
-except Exception as e:
-    print(f'❌ Upload failed: {e}')
-    exit(1)
-"
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git config credential.helper '!echo password=$HF_TOKEN'
         
-        if [ $? -eq 0 ]; then
-          echo "✅ Deployment completed successfully!"
-        else
-          echo "❌ Deployment failed!"
-          exit 1
-        fi
+        git add .
+        git diff --staged --quiet || git commit -m "🐕 Alberto auto-deploy
+Deploy Alberto mobile interface with FastAPI and Docker
+- Mobile-friendly chat interface
+- Touch-optimized design
+- Real-time responses with typing indicators
+- Sassy Alberto personality
+- Docker configuration for HuggingFace Spaces
+- Auto-deployed from GitHub Actions"
+        
+        git push https://$HF_TOKEN@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk main --force
+        
+        echo "🎉 SUCCESS! Alberto deployed to HuggingFace Spaces!"
+        echo "🌐 Space URL: https://huggingface.co/spaces/AlbertoRoca96-web/pup-sdk"
+        echo "📱 Build starting now - Alberto will be live on mobile in 2-5 minutes!"
+        echo "🐶 WOOF! Alberto is coming to HuggingFace! 🚀"
