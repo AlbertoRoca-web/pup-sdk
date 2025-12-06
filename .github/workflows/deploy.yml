@@ -12,8 +12,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repo (full clone)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure full git history (unshallow if needed)
+        run: |
+          git fetch --unshallow origin || echo "Already using full history"
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -68,12 +74,6 @@ jobs:
           EXPOSE 7860
           CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
           EOF
-
-      - name: Push main to Hugging Face Space
-        env:
-          HF_TOKEN: ${{ secrets.HUGGINGPUP }}
-        run: |
-          git push -f https://AlbertoRoca96-web:$HF_TOKEN@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk main
 
       - name: Upload Alberto UI to Hugging Face Space
         env:
