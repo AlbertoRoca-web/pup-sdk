@@ -19,14 +19,40 @@ jobs:
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@users.noreply.github.com"
 
-      - name: Clone HF Space repo
+      - name: Create/Clone HF Space repo
         env:
           HF_TOKEN: ${{ secrets.HUGGINGPUP }}
         run: |
           rm -rf hf-space
-          echo "Cloning HF Space..."
-          git clone https://AlbertoRoca-web:${HF_TOKEN}@huggingface.co/spaces/AlbertoRoca-web/pup-sdk hf-space
-          echo "Clone complete."
+          echo "Creating/Cloning HF Space..."
+          
+          # Try to clone first, if it fails, create the space
+          if git clone https://AlbertoRoca-web:${HF_TOKEN}@huggingface.co/spaces/AlbertoRoca-web/pup-sdk hf-space 2>/dev/null; then
+            echo "✅ HF Space cloned successfully."
+          else
+            echo "❌ HF Space not found, creating new space..."
+            # Install huggingface_hub to create space
+            pip install huggingface_hub
+            python -c "
+            from huggingface_hub import HfApi
+            api = HfApi(token='${HF_TOKEN}')
+            try:
+                api.create_repo(
+                    repo_id='AlbertoRoca-web/pup-sdk',
+                    repo_type='space',
+                    space_sdk='docker',
+                    private=False
+                )
+                print('✅ HF Space created successfully.')
+            except Exception as e:
+                print(f'⚠️  Space creation failed: {e}')
+                print('Assuming space already exists, continuing...')
+            "
+            
+            # Try cloning again
+            git clone https://AlbertoRoca-web:${HF_TOKEN}@huggingface.co/spaces/AlbertoRoca-web/pup-sdk hf-space
+            echo "✅ HF Space cloned after creation."
+          fi
 
       - name: Sync files to HF Space
         run: |
