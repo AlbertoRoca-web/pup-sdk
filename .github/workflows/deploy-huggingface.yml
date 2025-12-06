@@ -30,21 +30,27 @@ jobs:
       - name: Install Hugging Face CLI
         run: pip install 'huggingface_hub[cli]'
       
-      - name: Generate or update hf-space app files
+      - name: Generate hf-space app files
         run: |
           mkdir -p hf-space
           cd hf-space
-          echo 'fastapi' > requirements.txt
-          echo 'uvicorn[standard]' >> requirements.txt
-          cat << 'EOF' > app.py
+          
+          # Create requirements.txt
+          echo "fastapi" > requirements.txt
+          echo "uvicorn[standard]" >> requirements.txt
+          
+          # Create app.py
+          cat > app.py << 'EOL'
 from fastapi import FastAPI
 app = FastAPI()
 
 @app.get("/")
 def greet_json():
     return {"Hello": "World!"}
-EOF
-          cat << 'EOF' > Dockerfile
+EOL
+          
+          # Create Dockerfile
+          cat > Dockerfile << 'EOL'
 FROM python:3.9
 RUN useradd -m -u 1000 user
 USER user
@@ -54,9 +60,9 @@ COPY --chown=user ./requirements.txt requirements.txt
 RUN pip install --no-cache-dir --upgrade -r requirements.txt
 COPY --chown=user . /app
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
-EOF
+EOL
       
-      - name: Commit hf-space changes back to GitHub (optional)
+      - name: Commit hf-space changes to GitHub
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
