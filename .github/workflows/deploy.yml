@@ -43,9 +43,8 @@ jobs:
           # Generate the app files that Pointkedex uses
           echo "📝 Generating Pup SDK app files..."
           
-          # requirements.txt for Pup SDK Space
+          # requirements.txt for Pup SDK Space (only real PyPI deps)
           cat > requirements.txt << 'EOF'
-          pup-sdk
           fastapi
           uvicorn[standard]
           jinja2
