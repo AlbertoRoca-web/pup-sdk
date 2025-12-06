@@ -22,46 +22,30 @@ _pup_client: Optional[PupClient] = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage app lifecycle - connect to Alberto on startup."""
+    """Manage app lifecycle - create PupClient from environment on startup."""
     global _pup_client
     
-    # Read API keys from environment (never log the actual values)
-    syn_key = os.environ.get("SYN_API_KEY")
-    openai_key = os.environ.get("OPENAI_API_KEY")
-    alberto_url = os.environ.get("ALBERTO_API_URL", "http://localhost:8080")
-    timeout = int(os.environ.get("ALBERTO_TIMEOUT", "60"))
-    
-    # Determine which API key to use (never log the actual values)
-    api_key = None
-    if syn_key:
-        api_key = syn_key
-        provider = "Syn"
-    elif openai_key:
-        api_key = openai_key
-        provider = "OpenAI"
-    else:
-        print("❌ No model API key configured. Set SYN_API_KEY or OPENAI_API_KEY environment variable.")
-        _pup_client = None
-        yield
-        return
-    
+    # Create client from environment variables (secure, no logging)
     try:
-        # Connect to Alberto using selected provider
-        _pup_client = PupClient(
-            base_url=alberto_url,
-            api_key=api_key,
-            timeout=timeout
-        )
-        await _pup_client.connect()
-        print(f"🐕 Alberto connected to {alberto_url} using {provider} provider!")
+        _pup_client = PupClient.from_env()
+        app.state.client = _pup_client
+        
+        if _pup_client.demo_mode:
+            print("🐕 Alberto running in demo mode - no API key configured")
+        else:
+            print("🐕 Alberto client created with API key")
+            # Only connect if not in demo mode
+            alberto_url = os.environ.get("ALBERTO_API_URL", "http://localhost:8080")
+            _pup_client.base_url = alberto_url.rstrip("/")
+            await _pup_client.connect()
+            print("🐕 Alberto connected successfully!")
         yield
     except Exception as e:
-        print(f"❌ Failed to connect to Alberto: {e}")
-        print("📡 Running in demo mode - responses will be simulated")
-        _pup_client = None
+        print(f"❌ Failed to initialize Alberto client: {e}")
+        app.state.client = None
         yield
     finally:
-        if _pup_client:
+        if _pup_client and _pup_client._session:
             await _pup_client.close()
             print("🐕 Alberto disconnected")
 
@@ -91,27 +75,45 @@ def create_app() -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     async def home(request: Request):
         """Serve the main web interface."""
+        client = getattr(app.state, 'client', None)
+        connected = client and client.is_connected and not client.demo_mode
+        demo_mode = not client or client.demo_mode
+        
         return templates.TemplateResponse(
             "index.html",
             {
                 "request": request,
                 "title": "Alberto - Your Code Puppy!",
-                "connected": _pup_client is not None,
+                "connected": connected,
+                "demo_mode": demo_mode,
             },
         )
         
     @app.post("/api/chat")
     async def chat_endpoint(request: ChatRequest):
         """Handle chat requests."""
-        if not _pup_client:
-            # Connection error when no API key is configured
-            raise HTTPException(
-                status_code=503, 
-                detail="[CONNECTION_ERROR] Not connected to Alberto - No model API key configured"
+        client = getattr(app.state, 'client', None)
+        
+        if not client or client.demo_mode:
+            # Demo mode response
+            demo_responses = [
+                "🐕 Woof! Alberto is currently running in demo mode. This is a simulated response!",
+                "🐕 Hey there! In demo mode, I can still chat! To connect to the real Alberto, configure API keys!",
+                "🐕 Demo mode activated! I'm giving sample responses. Real Alberto needs API keys to help with actual coding tasks.",
+                "🐕 Hi! I'm Alberto's demo mode. The real me can help with coding, file operations, and more when API keys are configured!",
+            ]
+            
+            import random
+            response = random.choice(demo_responses)
+            
+            return ChatResponse(
+                success=True,
+                response=response,
+                execution_time=0.1,
             )
             
         try:
-            response = await _pup_client.chat(
+            response = await client.chat(
                 message=request.message,
                 context=request.context,
                 include_reasoning=request.include_reasoning,
@@ -128,22 +130,32 @@ def create_app() -> FastAPI:
     @app.get("/api/status")
     async def status_endpoint():
         """Get Alberto's status."""
-        if not _pup_client:
+        client = getattr(app.state, 'client', None)
+        
+        if not client:
             return {
                 "available": False,
                 "version": "0.1.0",
                 "connected": False,
-                "message": "[CONNECTION_ERROR] Not connected to Alberto - No model API key configured"
+                "demo_mode": True,
+                "message": "No client available"
             }
             
         try:
-            status = await _pup_client.get_status()
-            return status.model_dump()
+            status = await client.get_status()
+            result = status.model_dump()
+            # Add connection info
+            result.update({
+                "connected": client.is_connected,
+                "demo_mode": client.demo_mode
+            })
+            return result
         except Exception as e:
             return {
                 "available": False,
                 "error": str(e),
-                "connected": False,
+                "connected": client.is_connected,
+                "demo_mode": client.demo_mode,
             }
             
     @app.get("/api/capabilities")

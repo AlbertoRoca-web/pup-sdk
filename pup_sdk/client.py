@@ -41,6 +41,7 @@ class PupClient:
         base_url: str = "http://localhost:8080",
         api_key: Optional[str] = None,
         timeout: int = 60,
+        demo_mode: bool = False,
     ):
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
@@ -48,6 +49,8 @@ class PupClient:
         self._session: Optional[aiohttp.ClientSession] = None
         self._status_cache: Optional[PupStatus] = None
         self._cache_timestamp: Optional[datetime] = None
+        self.demo_mode = demo_mode
+        self.is_connected = bool(api_key) and not demo_mode
         
     async def __aenter__(self):
         await self.connect()
@@ -350,3 +353,36 @@ class PupClient:
         client = cls(base_url=base_url, api_key=api_key, timeout=timeout)
         await client.connect()
         return client
+        
+    @classmethod
+    def from_env(
+        cls,
+        base_url: str = "http://localhost:8080",
+        timeout: int = 60,
+    ) -> "PupClient":
+        """Create client instance from environment variables (secure, no logging)."""
+        syn_key = os.environ.get("SYN_API_KEY")
+        openai_key = os.environ.get("OPENAI_API_KEY")
+        
+        if syn_key:
+            return cls(
+                base_url=base_url,
+                api_key=syn_key,
+                timeout=timeout,
+                demo_mode=False
+            )
+        elif openai_key:
+            return cls(
+                base_url=base_url,
+                api_key=openai_key,
+                timeout=timeout,
+                demo_mode=False
+            )
+        else:
+            # Demo mode when no keys available
+            return cls(
+                base_url=base_url,
+                api_key=None,
+                timeout=timeout,
+                demo_mode=True
+            )

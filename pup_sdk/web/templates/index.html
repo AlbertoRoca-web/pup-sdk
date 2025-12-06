@@ -48,7 +48,7 @@
                     {% else %}
                     bg-yellow-100 text-yellow-800"
                     {% endif %}>
-                    {% if connected %}🔵 Connected{% else %}🟡 Demo Mode{% endif %}
+                    {% if connected %}🔵 Connected{% elif demo_mode %}🟡 Demo Mode{% else %}🟡 Demo Mode{% endif %}
                 </span>
                 <button onclick="toggleDarkMode()" class="p-2 rounded hover:bg-gray-200">
                     <span id="theme-icon">🌙</span>

@@ -38,9 +38,6 @@ jobs:
           cd ..
 
       - name: Generate and sync Pup SDK app files
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          SYN_API_KEY: ${{ secrets.SYN_API_KEY }}
         run: |
           echo "📝 Generating Pup SDK app files..."
 
