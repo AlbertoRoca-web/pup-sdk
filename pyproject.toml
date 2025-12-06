@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pup-sdk"
+version = "0.1.0"
+description = "Official SDK for Alberto the code puppy"
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Alberto Rolando Roca", email = "alberto@example.com"}
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "aiohttp>=3.8.0",
+    "pydantic>=2.0.0",
+    "fastapi>=0.95.0",
+    "uvicorn>=0.20.0",
+    "websockets>=11.0.0",
+    "python-multipart>=0.0.6",
+]
+
+[project.optional-dependencies]
+web = [
+    "jinja2>=3.1.0",
+    "tailwindcss>=2.2.0",
+]
+dev = [
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "mypy>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/AlbertoRoca-web/pup-sdk"
+Repository = "https://github.com/AlbertoRoca-web/pup-sdk"
+Documentation = "https://github.com/AlbertoRoca-web/pup-sdk/docs"
+
+[project.scripts]
+pup-cli = "pup_sdk.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pup_sdk*"]
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+
+[tool.ruff]
+line-length = 88
+target-version = "py38"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
