@@ -60,27 +60,40 @@ class PupClient:
         await self.close()
         
     async def connect(self) -> None:
-        """Initialize the HTTP session."""
-        if self._session is None:
-            headers = {"Content-Type": "application/json"}
-            if self.api_key:
-                headers["Authorization"] = f"Bearer {self.api_key}"
-                
-            self._session = aiohttp.ClientSession(
-                base_url=self.base_url,
-                headers=headers,
-                timeout=self.timeout,
-            )
+        """Initialize the HTTP session - minimal and idempotent."""
+        # Nothing to do if already connected
+        if self._session is not None:
+            return
             
-        # Mark as connected (minimal logging to avoid any issues)
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+            
+        self._session = aiohttp.ClientSession(
+            base_url=self.base_url,
+            headers=headers,
+            timeout=self.timeout,
+        )
+        
+        # Mark as connected - simple flag flip only
         self._is_connected = True
         
     async def test_connection(self) -> bool:
-        """Test the connection (separate from connect() to avoid recursion)."""
+        """Test the connection with a lightweight check (no recursion)."""
+        if self._session is None:
+            return False
+            
         try:
-            await self.get_status()
-            logger.info(f"🐕 Connection test successful for Alberto at {self.base_url}")
-            return True
+            # Simple health check with timeout - no status call to avoid recursion
+            timeout = aiohttp.ClientTimeout(total=5)
+            async with aiohttp.ClientSession(timeout=timeout) as test_session:
+                async with test_session.get(f"{self.base_url}/health", headers={"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}) as response:
+                    success = response.status == 200
+                    if success:
+                        logger.info(f"🐕 Connection test successful for Alberto at {self.base_url}")
+                    else:
+                        logger.warning(f"🐕 Connection test failed: HTTP {response.status}")
+                    return success
         except Exception as e:
             logger.warning(f"🐕 Connection test failed: {e}")
             return False
@@ -343,7 +356,7 @@ class PupClient:
             await asyncio.sleep(1)
             
     @classmethod
-    async def connect(
+    async def create_and_connect(
         cls,
         base_url: str = "http://localhost:8080",
         api_key: Optional[str] = None,
