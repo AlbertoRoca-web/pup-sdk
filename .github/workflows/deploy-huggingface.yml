@@ -13,49 +13,41 @@ jobs:
     - name: Check out repository
       uses: actions/checkout@v4
       
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
-        
-    - name: Install Hugging Face Hub CLI
+    - name: Setup Git
       run: |
-        pip install 'huggingface_hub[cli]' 'huggingface_hub'  
+        git config --global user.name "GitHub Actions"
+        git config --global user.email "actions@github.com"
         
-    - name: Deploy to HuggingFace Spaces
+    - name: Clone HuggingFace Space
       env:
         HF_TOKEN: ${{ secrets.HUGGINGPUP }}
       run: |
-        echo "🐕 Deploying Alberto to HuggingFace Spaces..."
-        
-        # Check if HF_TOKEN is set
         if [ -z "$HF_TOKEN" ]; then
-          echo "❌ HUGGINGPUP secret not found in repository secrets"
-          echo "📝 Please add HUGGINGPUP secret to your GitHub repository secrets:"
-          echo "   1. Go to: https://github.com/AlbertoRoca-web/pup-sdk/settings/secrets/actions"
-          echo "   2. Click 'New repository secret'"
-          echo "   3. Name: HUGGINGPUP"
-          echo "   4. Value: your_huggingface_token_here"
-          echo "   5. Click 'Add secret'"
+          echo "❌ HUGGINGPUP secret not found"
           exit 1
         fi
         
-        echo "✅ HUGGINGPUP secret found (length: ${#HF_TOKEN})"
-        echo "🚀 Starting deployment..."
+        echo "✅ Found HUGGINGPUP token"
+        git clone https://${HF_TOKEN}@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk.git hf-space
         
-        # Upload to HuggingFace Spaces
-        huggingface-cli upload \
-          --repo-type space \
-          --repo-id AlbertoRoca96-web/pup-sdk \
-          --commit-message "🐕 Auto-deploy Alberto mobile interface" \
-          .
-          
+    - name: Copy files to HuggingFace Space
+      run: |
+        # Copy all source files to the HuggingFace Space repo
+        cp -r app.py Dockerfile requirements.txt README.md hf-space/
+        
+    - name: Commit and push to HuggingFace
+      run: |
+        cd hf-space
+        git add .
+        git commit -m "🐕 Auto-deploy Alberto mobile interface [skip ci]"
+        git push
+        
         if [ $? -eq 0 ]; then
           echo "🎉 SUCCESS! Alberto deployed to HuggingFace Spaces!"
           echo "🌐 Space URL: https://huggingface.co/spaces/AlbertoRoca96-web/pup-sdk"
           echo "⏱️ Build starting now... wait 2-5 minutes"
           echo "📱 Alberto will be live on mobile soon!"
         else
-          echo "❌ Deployment failed! Check token permissions."
+          echo "❌ Deployment failed!"
           exit 1
         fi
