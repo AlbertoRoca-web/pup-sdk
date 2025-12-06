@@ -1,4 +1,4 @@
-"""🐕 Pup SDK - Official SDK for Alberto the code puppy!"""
+"""Pup SDK - Official SDK for Alberto the code puppy!"""
 
 from .client import PupClient
 from .exceptions import PupError, PupConnectionError, PupTimeoutError
@@ -26,5 +26,8 @@ __all__ = [
     "SearchResult",
 ]
 
-# Woof! 🐶
-print(f"\ud83d\dc15 Pup SDK v{__version__} initialized - Ready to play!")
+# Woof!
+try:
+    print(f"Pup SDK v{__version__} initialized - Ready to play!")
+except UnicodeEncodeError:
+    print(f"Pup SDK v{__version__} initialized - Ready to play!")

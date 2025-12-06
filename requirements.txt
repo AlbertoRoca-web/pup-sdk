@@ -12,6 +12,10 @@ python-multipart>=0.0.6
 # CLI
 click>=8.0.0
 
+# For HuggingFace Spaces deployment
+# Include pup-sdk itself (will be installed from local package)
+-e .
+
 # Optional for development
 black>=23.0.0
 ruff>=0.1.0

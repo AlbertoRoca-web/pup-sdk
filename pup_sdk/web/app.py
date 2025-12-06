@@ -1,6 +1,7 @@
 """FastAPI web application for Pup SDK."""
 
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from typing import Dict, Optional
 
@@ -14,7 +15,6 @@ import uvicorn
 from ..client import PupClient
 from ..exceptions import PupError, PupConnectionError, PupTimeoutError
 from ..types import ChatRequest, ChatResponse
-from .templates import get_template
 
 # Global client instance
 _pup_client: Optional[PupClient] = None
@@ -25,20 +25,30 @@ async def lifespan(app: FastAPI):
     """Manage app lifecycle - connect to Alberto on startup."""
     global _pup_client
     
+    # Read configuration from environment variables
+    alberto_url = os.environ.get("ALBERTO_API_URL", "http://localhost:8080")
+    api_key = os.environ.get("ALBERTO_API_KEY")
+    timeout = int(os.environ.get("ALBERTO_TIMEOUT", "60"))
+    
     try:
         # Connect to Alberto
-        _pup_client = PupClient()
+        _pup_client = PupClient(
+            base_url=alberto_url,
+            api_key=api_key,
+            timeout=timeout
+        )
         await _pup_client.connect()
-        print("\ud83d\dc15 Alberto connected for web interface!")
+        print(f"🐕 Alberto connected to {alberto_url}!")
         yield
     except Exception as e:
-        print(f"\u274c Failed to connect to Alberto: {e}")
-        print("Running in demo mode - responses will be simulated")
+        print(f"❌ Failed to connect to Alberto: {e}")
+        print("📡 Running in demo mode - responses will be simulated")
+        print("💡 To connect to Alberto, run: python bridge_server.py")
         yield
     finally:
         if _pup_client:
             await _pup_client.close()
-            print("\ud83d\dc15 Alberto disconnected")
+            print("🐕 Alberto disconnected")
 
 
 def create_app() -> FastAPI:
@@ -80,13 +90,19 @@ def create_app() -> FastAPI:
         """Handle chat requests."""
         if not _pup_client:
             # Demo mode response
+            demo_responses = [
+                "🐕 Woof! Alberto is currently running in demo mode. This is a simulated response!",
+                "🐕 Hey there! In demo mode, I can still chat! To connect to the real Alberto, ask the admin to run the bridge server!",
+                "🐕 Demo mode activated! I'm giving sample responses. Real Alberto needs the bridge server running to help with actual coding tasks.",
+                "🐕 Hi! I'm Alberto's demo mode. The real me can help with coding, file operations, and more when the bridge server is connected!",
+            ]
+            
+            import random
+            response = random.choice(demo_responses)
+            
             return ChatResponse(
                 success=True,
-                response=(
-                    "\ud83d\dc15 Woof! Alberto is currently offline in demo mode. "
-                    "This is a simulated response. To connect to the real Alberto, "
-                    "make sure the code-puppy agent is running on localhost:8080!"
-                ),
+                response=response,
                 execution_time=0.1,
             )
             
@@ -113,6 +129,7 @@ def create_app() -> FastAPI:
                 "available": False,
                 "version": "0.1.0 (demo mode)",
                 "connected": False,
+                "message": "Bridge server not connected"
             }
             
         try:
@@ -172,12 +189,16 @@ def launch_web(
     """Launch the web interface."""
     app = create_app()
     
-    print(f"\ud83d\dce1 Starting Alberto Web Interface on http://{host}:{port}")
+    print(f"🌐 Starting Alberto Web Interface on http://{host}:{port}")
     print("📱 Mobile-friendly interface ready!")
     print("🌐 HuggingFace Spaces compatible!")
     
+    # Show environment info for debugging
+    alberto_url = os.environ.get("ALBERTO_API_URL", "http://localhost:8080")
+    print(f"🔗 Alberto endpoint: {alberto_url}")
+    
     uvicorn.run(
-        "pup_sdk.web.app:app",
+        app,  # Direct app object instead of string reference
         host=host,
         port=port,
         reload=reload,
@@ -186,4 +207,8 @@ def launch_web(
 
 
 if __name__ == "__main__":
-    launch_web()
+    # Read from environment for HuggingFace Spaces compatibility
+    port = int(os.environ.get("PORT", 7860))
+    host = os.environ.get("HOST", "0.0.0.0")
+    
+    launch_web(host=host, port=port)

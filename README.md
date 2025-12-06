@@ -1,62 +1,53 @@
-# 🐕 Pup SDK
+title: Alberto - Code Puppy
+emoji: 🐕
+colorFrom: purple
+colorTo: pink
+sdk: gradio
+sdk_version: 4.0.0
+app_file: app.py
+pinned: false
+license: mit
 
-Official Python SDK for Alberto (your favorite code puppy)! Build mobile apps, web interfaces, and integrations to chat with Alberto from anywhere.
+---
 
-## ✨ Features
+# 🐕 Alberto - Your Code Puppy
 
-- 🚀 Full API access to Alberto's capabilities
-- 📱 Mobile-friendly web interface
-- 🛠️ File operations, shell commands, and more
-- 🐍 Pure Python with async support
-- 🌐 Ready for HuggingFace Spaces deployment
-- 📚 Comprehensive documentation
+Welcome to Alberto's HuggingFace Space! This is a mobile-friendly web interface for Alberto the code puppy.
 
-## 🚀 Quick Start
+## 🚀 What is Alberto?
 
-```bash
-pip install pup-sdk
-```
+Alberto is a sassy, helpful AI code assistant who can help you with:
+- 💻 Writing and debugging code
+- 📁 File operations
+- 🔍 Code search
+- 🎯 Shell commands
+- 🤖 Natural conversation
 
-```python
-import asyncio
-from pup_sdk import PupClient
+## 📱 Try it out!
 
-async def main():
-    client = await PupClient.connect()
-    response = await client.say_woof("Hey Alberto, what's up?")
-    print(response)
+Just start chatting with Alberto! He's ready to help with any coding questions or tasks.
 
-asyncio.run(main())
-```
+## 🛠️ Technical Details
 
-## 📱 Web Interface
+This Space runs the Pup SDK web interface:
+- **Backend**: FastAPI with async support
+- **Frontend**: Mobile-friendly HTML/JavaScript
+- **Dependencies**: See `requirements.txt`
+- **API Endpoint**: When Alberto is running, connects to bridge server
+- **Demo Mode**: Works even when Alberto is offline
 
-Launch the web interface:
+## 🌟 Features
 
-```python
-from pup_sdk.web import launch_web
+- 🎯 **Mobile Optimized**: Works great on phones and tablets
+- 🌙 **Dark Mode**: Easy on the eyes
+- ⚡ **Real-time**: Instant responses
+- 💬 **Chat Interface**: Natural conversation
+- 🛡️ **Safe**: All commands run in sandboxed environment
 
-launch_web(host="0.0.0.0", port=7860)  # HuggingFace Spaces ready!
-```
+## 🤝 Contributing
 
-## 🐾 Capabilities
+Want to help improve Alberto? Check out the [GitHub repository](https://github.com/AlbertoRoca-web/pup-sdk)!
 
-- 📁 File operations (read, write, list)
-- 🖥️ Shell command execution
-- 🔍 File search and grep
-- 🎯 Agent invocation
-- 📝 Code editing and refactoring
-
-## 📚 Documentation
-
-See the `docs/` directory for full API documentation and examples.
-
-## 🌟 Examples
-
-Check out the `examples/` folder for:
-- Mobile web app
-- CLI tool
-- Discord bot
-- VS Code extension
+---
 
 Made with 🐶 love by Alberto!
