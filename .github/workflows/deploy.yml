@@ -1,58 +1,3 @@
-name: Deploy to HuggingFace
-
-on:
-  push:
-    branches: [main]
-
-permissions:
-  contents: write
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-      
-      - name: Install dependencies
-        run: pip install huggingface_hub
-      
-      - name: Generate hf-space files
-        run: |
-          mkdir -p hf-space
-          
-          # Create requirements.txt
-          echo 'fastapi' > hf-space/requirements.txt
-          echo 'uvicorn[standard]' >> hf-space/requirements.txt
-          
-          # Create app.py
-          cat > hf-space/app.py << 'EOF'
-          from fastapi import FastAPI
-
-          app = FastAPI()
-
-          @app.get("/")
-          def greet_json():
-              return {"Hello": "World!"}
-          EOF
-          
-          # Create Dockerfile
-          cat > hf-space/Dockerfile << 'EOF'
-          FROM python:3.9
-          RUN useradd -m -u 1000 user
-          USER user
-          ENV PATH="/home/user/.local/bin:$PATH"
-          WORKDIR /app
-          COPY --chown=user ./requirements.txt requirements.txt
-          RUN pip install --no-cache-dir --upgrade -r requirements.txt
-          COPY --chown=user . /app
-          CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
-          EOF
-      
       - name: Upload hf-space folder to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HUGGINGPUP }}
@@ -67,6 +12,9 @@ jobs:
 
           api = HfApi(token=token)
 
+          # Debug: see which HF user this token belongs to
+          print("WHOAMI:", api.whoami())
+
           repo_id = "AlbertoRoca96-web/pup-sdk"
           local_dir = "hf-space"
 
@@ -75,6 +23,7 @@ jobs:
               repo_type="space",
               folder_path=local_dir,
               commit_message="Pup SDK auto-deploy from GitHub Actions",
+              create_pr=True,  # 👈 IMPORTANT: use PR instead of direct commit
           )
-          print("Uploaded commit:", commit_info.commit_url)
+          print("Upload result:", commit_info)
           PY
