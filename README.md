@@ -1,12 +1,3 @@
-title: Alberto - Code Puppy
-emoji: 🐕
-colorFrom: purple
-colorTo: pink
-sdk: docker
-pinned: false
-license: mit
-short_description: '🐕 Alberto the code puppy - your sassy coding assistant!'
-
 ---
 
 # 🐕 Alberto - Your Code Puppy!
