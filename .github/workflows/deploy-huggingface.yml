@@ -19,51 +19,21 @@ jobs:
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@users.noreply.github.com"
 
-      - name: Create/Clone HF Space repo
+      - name: Clone HF Space repo
         env:
           HF_TOKEN: ${{ secrets.HUGGINGPUP }}
         run: |
           rm -rf hf-space
-          echo "Creating/Cloning HF Space..."
-          
-          # Try to clone first, if it fails, create the space
-          if git clone https://AlbertoRoca-web:${HF_TOKEN}@huggingface.co/spaces/AlbertoRoca-web/pup-sdk hf-space 2>/dev/null; then
-            echo "✅ HF Space cloned successfully."
-          else
-            echo "❌ HF Space not found, creating new space..."
-            # Install huggingface_hub to create space
-            pip install huggingface_hub
-            python -c "
-            from huggingface_hub import HfApi
-            api = HfApi(token='${HF_TOKEN}')
-            try:
-                api.create_repo(
-                    repo_id='AlbertoRoca-web/pup-sdk',
-                    repo_type='space',
-                    space_sdk='docker',
-                    private=False
-                )
-                print('✅ HF Space created successfully.')
-            except Exception as e:
-                print(f'⚠️  Space creation failed: {e}')
-                print('Assuming space already exists, continuing...')
-            "
-            
-            # Try cloning again
-            git clone https://AlbertoRoca-web:${HF_TOKEN}@huggingface.co/spaces/AlbertoRoca-web/pup-sdk hf-space
-            echo "✅ HF Space cloned after creation."
-          fi
+          git clone https://AlbertoRoca-web:${HF_TOKEN}@huggingface.co/spaces/AlbertoRoca-web/pup-sdk hf-space
 
       - name: Sync files to HF Space
         run: |
-          echo "Syncing files to HF Space..."
           rsync -a --delete \
             --exclude='.git' --exclude='.github' --exclude='__pycache__' --exclude='*.pyc' \
             --exclude='.DS_Store' --exclude='*.log' --exclude='.pytest_cache' \
             app.py Dockerfile requirements.txt README.md .env.example pyproject.toml LICENSE \
             pup_sdk/ examples/ \
             hf-space/
-          echo "File sync complete."
 
       - name: Commit & push to HF Space
         env:
@@ -72,18 +42,8 @@ jobs:
           cd hf-space
           git add -A
           if git diff --cached --quiet; then
-            echo "✅ No changes to push."
+            echo "No changes to push."
           else
-            echo "📝 Committing changes to HF Space..."
-            git commit -m "🐶 Pup SDK auto-deploy - $(date '+%Y-%m-%d %H:%M:%S') - Deploy Pup SDK with FastAPI, gunicorn, and improved health checks"
-            echo "🚀 Pushing to HF Space..."
+            git commit -m "🐶 Pup SDK auto-deploy - $(date '+%Y-%m-%d %H:%M:%S')"
             git push
-            echo "✅ Deployment complete!"
           fi
-
-      - name: Deployment Summary
-        run: |
-          echo "🎯 Pup SDK Deployment Summary"
-          echo "📍 Space URL: https://huggingface.co/spaces/AlbertoRoca-web/pup-sdk"
-          echo "🕐 Deployed at: $(date '+%Y-%m-%d %H:%M:%S UTC')"
-          echo "🐶 Pup SDK is ready to assist with coding challenges!"
