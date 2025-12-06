@@ -40,7 +40,6 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HUGGINGPUP }}
         run: |
-          # Generate the app files that Pointkedex uses
           echo "📝 Generating Pup SDK app files..."
           
           # requirements.txt for Pup SDK Space (only real PyPI deps)
@@ -50,45 +49,44 @@ jobs:
           jinja2
           python-multipart
           EOF
-
+          
           # app.py that launches real Alberto (Pointkedex pattern)
           cat > app.py << 'EOF'
           import os
           from pup_sdk.web import launch_web
-
+          
           if __name__ == "__main__":
               port = int(os.environ.get("PORT", 7860))
               host = os.environ.get("HOST", "0.0.0.0")
               launch_web(host=host, port=port)
           EOF
-
+          
           # Dockerfile for Space (similar to Pointkedex)
           cat > Dockerfile << 'EOF'
           FROM python:3.9
-
+          
           RUN useradd -m -u 1000 user
           USER user
           ENV PATH="/home/user/.local/bin:$PATH"
-
+          
           WORKDIR /app
-
+          
           # Copy requirements first for better caching
           COPY requirements.txt .
           RUN pip install --no-cache-dir --upgrade pip && \n              pip install --no-cache-dir -r requirements.txt
-
+          
           # Copy the entire pup-sdk package
           COPY . .
-
+          
           CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
           EOF
-          EOF
-
+          
           # Copy static assets if they exist
           if [ -d "assets" ]; then
             cp -r assets/* hf-space/ 2>/dev/null || true
           fi
           
-          # Sync files to hf-space (mimicking rsync behavior)
+          # Sync files to hf-space
           echo "💾 Syncing files to Space repository..."
           cp -v requirements.txt app.py Dockerfile hf-space/
           
