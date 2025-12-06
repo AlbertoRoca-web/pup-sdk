@@ -72,9 +72,18 @@ class PupClient:
                 timeout=self.timeout,
             )
             
-        # Test connection
-        await self.get_status()
-        logger.info(f"🐕 Connected to Alberto at {self.base_url}")
+        # Mark as connected (no automatic status test to avoid recursion)
+        logger.info(f"🐕 HTTP session created for Alberto at {self.base_url}")
+        
+    async def test_connection(self) -> bool:
+        """Test the connection (separate from connect() to avoid recursion)."""
+        try:
+            await self.get_status()
+            logger.info(f"🐕 Connection test successful for Alberto at {self.base_url}")
+            return True
+        except Exception as e:
+            logger.warning(f"🐕 Connection test failed: {e}")
+            return False
         
     async def close(self) -> None:
         """Close the HTTP session."""

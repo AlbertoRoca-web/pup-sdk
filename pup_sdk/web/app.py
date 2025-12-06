@@ -34,11 +34,20 @@ async def lifespan(app: FastAPI):
             print("🐕 Alberto running in demo mode - no API key configured")
         else:
             print("🐕 Alberto client created with API key")
-            # Only connect if not in demo mode
-            alberto_url = os.environ.get("ALBERTO_API_URL", "http://localhost:8080")
-            _pup_client.base_url = alberto_url.rstrip("/")
-            await _pup_client.connect()
-            print("🐕 Alberto connected successfully!")
+            # In HuggingFace Space mode, we don't connect to external Alberto server
+            # The web app itself acts as the Alberto interface
+            alberto_url = os.environ.get("ALBERTO_API_URL")
+            if alberto_url:
+                # Only connect if we have an external Alberto server URL
+                _pup_client.base_url = alberto_url.rstrip("/")
+                await _pup_client.connect()
+                # Test the connection separately
+                if await _pup_client.test_connection():
+                    print("🐕 Alberto connected to external server successfully!")
+                else:
+                    print("⚠️ Alberto client created but external server unreachable")
+            else:
+                print("🐕 Alberto running in direct LLM mode (no external server)")
         yield
     except Exception as e:
         print(f"❌ Failed to initialize Alberto client: {e}")
