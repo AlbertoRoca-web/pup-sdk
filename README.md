@@ -34,6 +34,16 @@ This deployment uses:\- FastAPI backend
 - HuggingFace Spaces
 - Mobile-responsive design
 
+## 🏃‍♂️ Run Alberto locally (real keys)
+
+To run the same image as HuggingFace Spaces but with real API keys (not demo mode):
+
+```bash
+docker run -it -p 7860:7860 --platform=linux/amd64 \n  -e OPEN_API_KEY="YOUR_OPEN_API_KEY" \n  -e SYN_API_KEY="YOUR_SYN_API_KEY" \n  registry.hf.space/albertoroca96-web-pup-sdk:latest
+```
+
+This starts the official HuggingFace image but with your real keys, so Alberto will have full functionality instead of running in demo mode.
+
 ## 🛠️ Technical Details
 
 This deployment uses:
@@ -82,6 +92,51 @@ The frontend uses TailwindCSS with a Vite build pipeline:
 - **HuggingFace Space**: https://huggingface.co/spaces/AlbertoRoca96-web/pup-sdk
 - **GitHub Pages**: https://albertoroca-web.github.io/pup-sdk/
 
+## 🐛 Understanding HTTP Status Codes
+
+### HTTP 304 - Cache Revalidation (Normal!)
+
+You may see `304 Not Modified` responses for:
+- `inner.html`
+- `out-*.js`
+- `/static/style.css`
+
+**What this means**: Browser has cached the resource and server confirms it's unchanged.
+
+**This is NOT an error** - it's browser optimization working correctly! Your FastAPI app cannot and should not try to turn these into 200 responses. 304 means "use your cached copy" which is faster and more efficient.
+
+### HTTP 202 - HuggingFace Telemetry (Normal!)
+
+You may see `202 Accepted` responses for:
+- `/api/event`
+- `/telemetry`
+- `/metrics`
+- `/live`
+
+**What this means**: These are HuggingFace's analytics/telemetry endpoints, NOT part of your FastAPI app.
+
+**This is NOT an error** - 202 means "Accepted" (request queued for async processing). This is HuggingFace infrastructure you cannot modify.
+
+## 🐛 Debugging Network Requests
+
+When debugging your app in Chrome DevTools:
+
+1. **Filter for your app**: `albertoroca96-web-pup-sdk.hf.space`
+2. **Focus on these endpoints**:
+   - `/` (should be 200)
+   - `/api/status` (should be 200)
+   - `/api/chat` (should be 200)
+   - `/static/style.css` (should be 200 or 304, both fine)
+   - `htmx.min.js` (should be 200)
+
+3. **Real problems to fix**: Look for 4xx or 5xx status codes on YOUR endpoints
+4. **Expected noise**: 202/304 entries can be ignored - they're telemetry and caching working normally
+
+**Pro tip**: Hide expected responses to focus on real errors:
+```
+-method:OPTIONS -status-code:202 -status-code:304
+```
+
 ## 📄 License
 
-MIT License - see the [LICENSE](LICENSE) file for details."🐶 Testing Pointkedex pattern deploy workflow - $(date)" 
+MIT License - see the [LICENSE](LICENSE) file for details.🐶 Testing Pointkedex pattern deploy workflow - $(date)" 

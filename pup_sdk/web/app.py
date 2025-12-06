@@ -1,4 +1,11 @@
-"""FastAPI web application for Pup SDK."""
+"""FastAPI web application for Pup SDK.
+
+Note on HTTP Status Codes:
+- HTTP 304 (Not Modified) for static assets is normal cache revalidation
+- HTTP 202 (Accepted) for /api/event, /telemetry, /metrics are HuggingFace analytics, not our app
+- Only 4xx/5xx on our endpoints (/api/status, /api/chat, /static/style.css) indicate real problems
+- 202/304 responses are expected behavior and should NOT be "fixed" in code
+"""
 
 import asyncio
 import os
