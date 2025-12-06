@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI):
                 print(f"⚠️ Failed to connect Alberto client: {connect_error}")
                 # Fall back to demo mode on connection failure
                 _pup_client.demo_mode = True
-                _pup_client.is_connected = False
+                _pup_client._is_connected = False
                 print("🔄 Falling back to demo mode due to connection failure")
         yield
     except Exception as e:

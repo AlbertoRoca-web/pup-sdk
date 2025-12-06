@@ -50,7 +50,7 @@ class PupClient:
         self._status_cache: Optional[PupStatus] = None
         self._cache_timestamp: Optional[datetime] = None
         self.demo_mode = demo_mode
-        self.is_connected = bool(api_key) and not demo_mode
+        self._is_connected = bool(api_key) and not demo_mode
         
     async def __aenter__(self):
         await self.connect()
@@ -73,7 +73,7 @@ class PupClient:
             )
             
         # Mark as connected (minimal logging to avoid any issues)
-        self.is_connected = True
+        self._is_connected = True
         
     async def test_connection(self) -> bool:
         """Test the connection (separate from connect() to avoid recursion)."""
@@ -90,8 +90,14 @@ class PupClient:
         if self._session:
             await self._session.close()
             self._session = None
+            self._is_connected = False
             logger.info("🐕 Disconnected from Alberto")
             
+    @property
+    def is_connected(self) -> bool:
+        """Check if the client is connected."""
+        return self._is_connected and self._session is not None
+    
     @property
     def session(self) -> aiohttp.ClientSession:
         """Get the HTTP session, raising error if not connected."""
