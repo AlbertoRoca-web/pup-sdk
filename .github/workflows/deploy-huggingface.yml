@@ -29,8 +29,6 @@ jobs:
       - name: Sync files to HF Space
         run: |
           rsync -a --delete \
-            --exclude='.git' --exclude='.github' --exclude='__pycache__' --exclude='*.pyc' \
-            --exclude='.DS_Store' --exclude='*.log' --exclude='.pytest_cache' \
             app.py Dockerfile requirements.txt README.md .env.example pyproject.toml LICENSE \
             pup_sdk/ examples/ \
             hf-space/
