@@ -12,56 +12,41 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        
-    - name: Setup git
-      run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        
-    - name: Checkout HF Space
+      
+    - name: Deploy to HuggingFace Spaces
       env:
         HF_TOKEN: ${{ secrets.HUGGINGPUP }}
       run: |
+        echo "Deploying Alberto to HuggingFace Spaces..."
+        
+        if [ -z "$HF_TOKEN" ]; then
+          echo "HUGGINGPUP secret not found"
+          exit 1
+        fi
+        
+        echo "Found HUGGINGPUP token"
+        
+        # Clone the space
         git clone https://$HF_TOKEN@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk
         
-    - name: Sync files
-      run: |
-        # Delete existing git repo to avoid conflicts
+        # Remove existing git to avoid conflicts
         rm -rf AlbertoRoca96-web-pup-sdk/.git
         
         # Copy deployment files
-        cp app.py Dockerfile requirements.txt README.md AlbertoRoca96-web-pup-sdk/
+        cp app.py Dockerfile requirements.txt README.md AlbertoRoca96-web-pup-sdk/ 2>/dev/null || true
         
-        # Copy any additional needed files
-        if [ -d "pup_sdk" ]; then
-            cp -r pup_sdk AlbertoRoca96-web-pup-sdk/ || true
-        fi
-        
-    - name: Commit and push
-      env:
-        HF_TOKEN: ${{ secrets.HUGGINGPUP }}
-      run: |
+        # Setup git user
         cd AlbertoRoca96-web-pup-sdk
+        git config user.name "github-actions"
+        git config user.email "actions@github.com"
+        git init
+        git remote add origin https://$HF_TOKEN@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk
         
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        git config credential.helper '!echo password=$HF_TOKEN'
-        
+        # Add and commit files
         git add .
-        git diff --staged --quiet || git commit -m "🐕 Alberto auto-deploy
-Deploy Alberto mobile interface with FastAPI and Docker
-- Mobile-friendly chat interface
-- Touch-optimized design
-- Real-time responses with typing indicators
-- Sassy Alberto personality
-- Docker configuration for HuggingFace Spaces
-- Auto-deployed from GitHub Actions"
+        git commit -m "Deploy Alberto mobile interface"
         
-        git push https://$HF_TOKEN@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk main --force
+        # Push to deploy
+        git push origin main --force
         
-        echo "🎉 SUCCESS! Alberto deployed to HuggingFace Spaces!"
-        echo "🌐 Space URL: https://huggingface.co/spaces/AlbertoRoca96-web/pup-sdk"
-        echo "📱 Build starting now - Alberto will be live on mobile in 2-5 minutes!"
-        echo "🐶 WOOF! Alberto is coming to HuggingFace! 🚀"
+        echo "SUCCESS! Alberto deployed!"
