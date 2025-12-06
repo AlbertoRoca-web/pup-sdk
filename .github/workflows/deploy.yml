@@ -17,10 +17,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Ensure full git history (unshallow if needed)
-        run: |
-          git fetch --unshallow origin || echo "Already using full history"
-
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
@@ -29,12 +25,26 @@ jobs:
       - name: Install dependencies
         run: pip install huggingface_hub
 
-      - name: Generate hf-space files (Real Alberto UI)
+      - name: Clone HuggingFace Space with full history
+        env:
+          HF_TOKEN: ${{ secrets.HUGGINGPUP }}
         run: |
-          mkdir -p hf-space
+          echo "🔗 Cloning HuggingFace Space with full history..."
+          git clone https://AlbertoRoca96-web:${HF_TOKEN}@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk hf-space
+          cd hf-space
+          echo "📁 Space repo contents:"
+          ls -la
+          cd ..
 
-          # requirements.txt for Alberto UI
-          cat > hf-space/requirements.txt << 'EOF'
+      - name: Generate and sync Pup SDK app files
+        env:
+          HF_TOKEN: ${{ secrets.HUGGINGPUP }}
+        run: |
+          # Generate the app files that Pointkedex uses
+          echo "📝 Generating Pup SDK app files..."
+          
+          # requirements.txt for Pup SDK Space
+          cat > requirements.txt << 'EOF'
           pup-sdk
           fastapi
           uvicorn[standard]
@@ -42,8 +52,8 @@ jobs:
           python-multipart
           EOF
 
-          # app.py that launches real Alberto
-          cat > hf-space/app.py << 'EOF'
+          # app.py that launches real Alberto (Pointkedex pattern)
+          cat > app.py << 'EOF'
           import os
           from pup_sdk.web import launch_web
 
@@ -53,8 +63,8 @@ jobs:
               launch_web(host=host, port=port)
           EOF
 
-          # Dockerfile for Alberto UI
-          cat > hf-space/Dockerfile << 'EOF'
+          # Dockerfile for Space (similar to Pointkedex)
+          cat > Dockerfile << 'EOF'
           FROM python:3.9
 
           RUN useradd -m -u 1000 user
@@ -63,45 +73,61 @@ jobs:
 
           WORKDIR /app
 
+          # Copy requirements first for better caching
+          COPY requirements.txt .
+          RUN pip install --no-cache-dir --upgrade pip && \
+              pip install --no-cache-dir -r requirements.txt
+
           # Copy the entire pup-sdk package
           COPY . .
 
-          # Install requirements including the package itself
-          RUN pip install --no-cache-dir --upgrade pip && \
-              pip install --no-cache-dir -e . && \
-              pip install fastapi uvicorn[standard] jinja2 python-multipart
+          # Install the package itself
+          RUN pip install --no-cache-dir -e .
 
           EXPOSE 7860
           CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
           EOF
 
-      - name: Upload Alberto UI to Hugging Face Space
+          # Copy static assets if they exist
+          if [ -d "assets" ]; then
+            cp -r assets/* hf-space/ 2>/dev/null || true
+          fi
+          
+          # Sync files to hf-space (mimicking rsync behavior)
+          echo "💾 Syncing files to Space repository..."
+          cp -v requirements.txt app.py Dockerfile hf-space/
+          
+          # Copy pup_sdk package to hf-space
+          if [ -d "pup_sdk" ]; then
+            cp -rv pup_sdk/ hf-space/
+          fi
+          
+          echo "📋 Updated hf-space contents:"
+          ls -la hf-space/
+
+      - name: Commit and push to HuggingFace Space
         env:
           HF_TOKEN: ${{ secrets.HUGGINGPUP }}
-          HUGGINGFACE_HUB_TOKEN: ${{ secrets.HUGGINGPUP }}
         run: |
-          python - << 'PY'
-          import os
-          from huggingface_hub import HfApi
-
-          token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN")
-          assert token, "HF_TOKEN/HUGGINGFACE_HUB_TOKEN is not set in env"
-
-          api = HfApi(token=token)
-
-          # Debug: confirm which HF user this token belongs to
-          print("WHOAMI:", api.whoami())
-
-          repo_id = "AlbertoRoca96-web/pup-sdk"
-          local_dir = "hf-space"
-
-          commit_info = api.upload_folder(
-              repo_id=repo_id,
-              repo_type="space",
-              folder_path=local_dir,
-              commit_message="🐶 Deploy REAL Alberto Code Puppy UI from GitHub Actions",
-              create_pr=True,  # create PR instead of committing directly to main
-          )
-          print("🎉 Alberto UI upload result:", commit_info)
-          print("🔗 PR URL will be available on the HuggingFace Space page!")
-          PY
+          cd hf-space
+          
+          # Configure git for the Space repository
+          git config user.name "Alberto Code Puppy"
+          git config user.email "alberto@code-puppy.ai"
+          
+          # Add all changes
+          echo "📝 Adding changes to git..."
+          git add -A
+          
+          # Check if there are changes to commit
+          if git diff --cached --quiet; then
+            echo "ℹ️ No changes to commit"
+          else
+            echo "💾 Committing changes..."
+            git commit -m "Sync Pup SDK app files from GitHub main"
+            
+            echo "🚀 Pushing to HuggingFace Space..."
+            git push
+          fi
+          
+          echo "✅ Space deployment complete!"
