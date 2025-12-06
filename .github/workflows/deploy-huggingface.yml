@@ -36,8 +36,8 @@ jobs:
           cd hf-space
           
           # Create requirements.txt
-          echo "fastapi" > requirements.txt
-          echo "uvicorn[standard]" >> requirements.txt
+          echo 'fastapi' > requirements.txt
+          echo 'uvicorn[standard]' >> requirements.txt
           
           # Create app.py
           cat > app.py << 'EOL'
