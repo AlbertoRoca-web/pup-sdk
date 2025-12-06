@@ -30,13 +30,13 @@ jobs:
         git clone https://$HF_TOKEN@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk
         
         # Remove existing git to avoid conflicts
-        rm -rf AlbertoRoca96-web-pup-sdk/.git
+        rm -rf pup-sdk/.git
         
         # Copy deployment files
-        cp app.py Dockerfile requirements.txt README.md AlbertoRoca96-web-pup-sdk/ 2>/dev/null || true
+        cp app.py Dockerfile requirements.txt README.md pup-sdk/
         
         # Setup git user
-        cd AlbertoRoca96-web-pup-sdk
+        cd pup-sdk
         git config user.name "github-actions"
         git config user.email "actions@github.com"
         git init
