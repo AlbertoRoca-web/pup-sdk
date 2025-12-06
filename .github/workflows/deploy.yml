@@ -57,23 +57,23 @@ EOF
           HF_TOKEN: ${{ secrets.HUGGINGPUP }}
           HUGGINGFACE_HUB_TOKEN: ${{ secrets.HUGGINGPUP }}
         run: |
-          python - << 'PY'
+          python -c '
 import os
 from huggingface_hub import HfApi
 
-token = os.environ.get('HF_TOKEN') or os.environ.get('HUGGINGFACE_HUB_TOKEN')
-assert token, 'HF_TOKEN/HUGGINGFACE_HUB_TOKEN is not set in env'
+token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_HUB_TOKEN")
+assert token, "HF_TOKEN/HUGGINGFACE_HUB_TOKEN is not set in env"
 
 api = HfApi(token=token)
 
-repo_id = 'AlbertoRoca96-web/pup-sdk'
-local_dir = 'hf-space'
+repo_id = "AlbertoRoca96-web/pup-sdk"
+local_dir = "hf-space"
 
 commit_info = api.upload_folder(
     repo_id=repo_id,
-    repo_type='space',
+    repo_type="space",
     folder_path=local_dir,
-    commit_message='🐶 Pup SDK auto-deploy from GitHub Actions'
+    commit_message="🐶 Pup SDK auto-deploy from GitHub Actions"
 )
-print('Uploaded commit:', commit_info.commit_url)
-PY
+print("Uploaded commit:", commit_info.commit_url)
+'
