@@ -49,14 +49,7 @@ jobs:
             echo "✅ No changes to push."
           else
             echo "📝 Committing changes to HF Space..."
-            git commit -m "🐶 Pup SDK auto-deploy - $(date '+%Y-%m-%d %H:%M:%S')
-Deploy Pup SDK to HuggingFace Spaces
-- FastAPI backend with async support
-- Mobile-friendly web interface  
-- OpenAI-powered code assistant
-- Dockerized deployment with gunicorn
-- Real-time streaming responses
-- Health check endpoint added"
+            git commit -m "🐶 Pup SDK auto-deploy - $(date '+%Y-%m-%d %H:%M:%S') - Deploy Pup SDK with FastAPI, gunicorn, and improved health checks"
             echo "🚀 Pushing to HF Space..."
             git push
             echo "✅ Deployment complete!"
