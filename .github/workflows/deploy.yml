@@ -41,13 +41,14 @@ jobs:
         run: |
           echo "📝 Generating Pup SDK app files..."
 
-          # requirements.txt for Pup SDK Space (include aiohttp)
+          # requirements.txt for Pup SDK Space (include all deps)
           cat > requirements.txt << 'EOF'
           fastapi
           uvicorn[standard]
           jinja2
           python-multipart
           aiohttp
+          openai
           EOF
 
           # app.py that launches real Alberto
