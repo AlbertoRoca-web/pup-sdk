@@ -86,6 +86,24 @@ def create_app() -> FastAPI:
     # Templates
     templates = Jinja2Templates(directory="pup_sdk/web/templates")
     
+    async def _run_demo_chat(request: ChatRequest) -> ChatResponse:
+        """Helper function for demo mode chat responses."""
+        demo_responses = [
+            "🐕 Woof! Alberto is currently running in demo mode. This is a simulated response!",
+            "🐕 Hey there! In demo mode, I can still chat! To connect to the real Alberto, configure API keys!",
+            "🐕 Demo mode activated! I'm giving sample responses. Real Alberto needs API keys to help with actual coding tasks.",
+            "🐕 Hi! I'm Alberto's demo mode. The real me can help with coding, file operations, and more when API keys are configured!",
+        ]
+        
+        import random
+        response = random.choice(demo_responses)
+        
+        return ChatResponse(
+            success=True,
+            response=response,
+            execution_time=0.1,
+        )
+    
     @app.get("/", response_class=HTMLResponse)
     async def home(request: Request):
         """Serve the main web interface."""
@@ -105,39 +123,24 @@ def create_app() -> FastAPI:
         
     @app.post("/api/chat")
     async def chat_endpoint(request: ChatRequest):
-        """Handle chat requests."""
+        """Handle chat requests with demo fallback on all failures."""
         client = getattr(app.state, 'client', None)
         
+        # (a) if no client or demo mode, return demo chat
         if not client or client.demo_mode:
-            # Demo mode response
-            demo_responses = [
-                "🐕 Woof! Alberto is currently running in demo mode. This is a simulated response!",
-                "🐕 Hey there! In demo mode, I can still chat! To connect to the real Alberto, configure API keys!",
-                "🐕 Demo mode activated! I'm giving sample responses. Real Alberto needs API keys to help with actual coding tasks.",
-                "🐕 Hi! I'm Alberto's demo mode. The real me can help with coding, file operations, and more when API keys are configured!",
-            ]
+            return await _run_demo_chat(request)
             
-            import random
-            response = random.choice(demo_responses)
-            
-            return ChatResponse(
-                success=True,
-                response=response,
-                execution_time=0.1,
-            )
-            
-        # Ensure client is connected before sending chat
-        if not client.demo_mode and not client.is_connected:
+        # (b) if live client but not connected, try to connect and fallback to demo on failure
+        if not client.is_connected:
             try:
                 await client.connect()
-                print("🔄 Reconnected client for chat request")
-            except Exception as connect_error:
-                return {
-                    "success": False,
-                    "response": "Connection failed. Please try again later.",
-                    "error": "connection_failed"
-                }
+            except Exception:
+                # Flip to demo mode on connection failure
+                client.demo_mode = True
+                client._is_connected = False
+                return await _run_demo_chat(request)
         
+        # (c) try live chat, fallback to demo on any exception
         try:
             response = await client.chat(
                 message=request.message,
@@ -146,41 +149,19 @@ def create_app() -> FastAPI:
                 auto_execute=request.auto_execute,
             )
             return response
-        except PupTimeoutError:
-            return {
-                "success": False,
-                "response": "Request timeout. Please try again.",
-                "error": "timeout"
-            }
-        except PupConnectionError:
-            # Try to reconnect once more
-            try:
-                await client.connect()
-                response = await client.chat(
-                    message=request.message,
-                    context=request.context,
-                    include_reasoning=request.include_reasoning,
-                    auto_execute=request.auto_execute,
-                )
-                return response
-            except Exception:
-                return {
-                    "success": False,
-                    "response": "Connection temporarily unavailable. Please try again.",
-                    "error": "connection_failed"
-                }
-        except PupError as e:
-            return {
-                "success": False,
-                "response": "An error occurred while processing your request.",
-                "error": "processing_error"
-            }
+        except (PupTimeoutError, PupConnectionError, PupError, Exception) as e:
+            # Log short message and flip to demo mode on any failure
+            print(f"Chat failed, falling back to demo: {type(e).__name__}")
+            client.demo_mode = True
+            client._is_connected = False
+            return await _run_demo_chat(request)
             
     @app.get("/api/status")
     async def status_endpoint():
-        """Get Alberto's status."""
+        """Get Alberto's status with proper demo fallback."""
         client = getattr(app.state, 'client', None)
         
+        # (a) if client is None, return demo mode response
         if not client:
             return {
                 "available": False,
@@ -189,35 +170,52 @@ def create_app() -> FastAPI:
                 "demo_mode": True,
                 "message": "No client available"
             }
+        
+        # (b) if client.demo_mode is True, return immediate demo response
+        if client.demo_mode:
+            return {
+                "available": True,
+                "version": "0.1.0",
+                "connected": False,
+                "demo_mode": True,
+                "message": "Running in demo mode"
+            }
             
-        # Check if client needs connection
-        if not client.demo_mode and not client.is_connected:
+        # (c) if not client.is_connected, try to connect and fallback to demo on failure
+        if not client.is_connected:
             try:
                 await client.connect()
-                print("🔄 Reconnected client for status check")
-            except Exception as connect_error:
+            except Exception:
+                # Flip to demo mode on any connection failure
+                client.demo_mode = True
+                client._is_connected = False
                 return {
                     "available": False,
+                    "version": "0.1.0",
                     "connected": False,
-                    "demo_mode": client.demo_mode,
+                    "demo_mode": True,
                     "error": "connection_failed"
                 }
         
+        # (d) try to get status, fallback to demo on any exception
         try:
             status = await client.get_status()
             result = status.model_dump()
-            # Add connection info
+            # Only return connected:true when everything is working
             result.update({
-                "connected": client.is_connected,
+                "connected": client.is_connected and not client.demo_mode,
                 "demo_mode": client.demo_mode
             })
             return result
-        except Exception as e:
-            # Don't expose internal PupClient error messages
+        except Exception:
+            # Flip to demo mode on any status failure
+            client.demo_mode = True
+            client._is_connected = False
             return {
                 "available": False,
-                "connected": client.is_connected,
-                "demo_mode": client.demo_mode,
+                "version": "0.1.0",
+                "connected": False,
+                "demo_mode": True,
                 "error": "connection_failed"
             }
             
