@@ -83,6 +83,9 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     
+    # Mount static files
+    app.mount("/static", StaticFiles(directory="pup_sdk/web/static"), name="static")
+    
     # Templates
     templates = Jinja2Templates(directory="pup_sdk/web/templates")
     
