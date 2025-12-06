@@ -61,7 +61,7 @@ jobs:
               launch_web(host=host, port=port)
           EOF
 
-          # Dockerfile for Space (no editable install, no stray \n)
+          # Dockerfile for Space (cmd: python app.py)
           cat > Dockerfile << 'EOF'
           FROM python:3.9
 
@@ -79,7 +79,7 @@ jobs:
           # Copy the entire app (including pup_sdk)
           COPY . .
 
-          CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
+          CMD ["python", "app.py"]
           EOF
 
           # Copy static assets if they exist
