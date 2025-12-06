@@ -1,19 +1,46 @@
-name: Test HF Connection
+name: Deploy Pup SDK to HuggingFace Spaces
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
-  test:
+  deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Test both HF usernames
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git for commit
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@users.noreply.github.com"
+
+      - name: Clone HF Space repo
         env:
           HF_TOKEN: ${{ secrets.HUGGINGPUP }}
         run: |
-          echo "Testing AlbertoRoca-web..."
-          git ls-remote https://AlbertoRoca-web:${HF_TOKEN}@huggingface.co/spaces/AlbertoRoca-web/pup-sdk || echo "AlbertoRoca-web FAILED"
-          
-          echo "Testing AlbertoRoca96-web..."
-          git ls-remote https://AlbertoRoca96-web:${HF_TOKEN}@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk || echo "AlbertoRoca96-web FAILED"
+          rm -rf hf-space
+          git clone https://AlbertoRoca96-web:${HF_TOKEN}@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk hf-space
+
+      - name: Sync files to HF Space
+        run: |
+          rsync -a --delete \
+            app.py Dockerfile requirements.txt \
+            hf-space/
+
+      - name: Commit & push to HF Space
+        env:
+          HF_TOKEN: ${{ secrets.HUGGINGPUP }}
+        run: |
+          cd hf-space
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to push."
+          else
+            git commit -m "Deploy minimal FastAPI app"
+            git push
+          fi
