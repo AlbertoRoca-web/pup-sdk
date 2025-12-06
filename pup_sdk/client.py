@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
@@ -328,9 +329,24 @@ class PupClient:
         cls,
         base_url: str = "http://localhost:8080",
         api_key: Optional[str] = None,
+        model: Optional[str] = None,
         timeout: int = 60,
     ) -> "PupClient":
         """Create and connect a client instance."""
+        # Read API keys from environment if not provided
+        if not api_key:
+            syn_key = os.environ.get("SYN_API_KEY")
+            openai_key = os.environ.get("OPENAI_API_KEY")
+            
+            if syn_key:
+                api_key = syn_key
+                logger.info("Using Syn provider")
+            elif openai_key:
+                api_key = openai_key
+                logger.info("Using OpenAI provider")
+            else:
+                raise ValueError("No model API key configured. Set SYN_API_KEY or OPENAI_API_KEY environment variable.")
+        
         client = cls(base_url=base_url, api_key=api_key, timeout=timeout)
         await client.connect()
         return client

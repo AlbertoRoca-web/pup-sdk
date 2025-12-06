@@ -1,0 +1,2 @@
+[console_scripts]
+pup-cli = pup_sdk.cli:main

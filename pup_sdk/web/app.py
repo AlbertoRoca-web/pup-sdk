@@ -25,25 +25,40 @@ async def lifespan(app: FastAPI):
     """Manage app lifecycle - connect to Alberto on startup."""
     global _pup_client
     
-    # Read configuration from environment variables
+    # Read API keys from environment (never log the actual values)
+    syn_key = os.environ.get("SYN_API_KEY")
+    openai_key = os.environ.get("OPENAI_API_KEY")
     alberto_url = os.environ.get("ALBERTO_API_URL", "http://localhost:8080")
-    api_key = os.environ.get("ALBERTO_API_KEY")
     timeout = int(os.environ.get("ALBERTO_TIMEOUT", "60"))
     
+    # Determine which API key to use (never log the actual values)
+    api_key = None
+    if syn_key:
+        api_key = syn_key
+        provider = "Syn"
+    elif openai_key:
+        api_key = openai_key
+        provider = "OpenAI"
+    else:
+        print("❌ No model API key configured. Set SYN_API_KEY or OPENAI_API_KEY environment variable.")
+        _pup_client = None
+        yield
+        return
+    
     try:
-        # Connect to Alberto
+        # Connect to Alberto using selected provider
         _pup_client = PupClient(
             base_url=alberto_url,
             api_key=api_key,
             timeout=timeout
         )
         await _pup_client.connect()
-        print(f"🐕 Alberto connected to {alberto_url}!")
+        print(f"🐕 Alberto connected to {alberto_url} using {provider} provider!")
         yield
     except Exception as e:
         print(f"❌ Failed to connect to Alberto: {e}")
         print("📡 Running in demo mode - responses will be simulated")
-        print("💡 To connect to Alberto, run: python bridge_server.py")
+        _pup_client = None
         yield
     finally:
         if _pup_client:
@@ -89,21 +104,10 @@ def create_app() -> FastAPI:
     async def chat_endpoint(request: ChatRequest):
         """Handle chat requests."""
         if not _pup_client:
-            # Demo mode response
-            demo_responses = [
-                "🐕 Woof! Alberto is currently running in demo mode. This is a simulated response!",
-                "🐕 Hey there! In demo mode, I can still chat! To connect to the real Alberto, ask the admin to run the bridge server!",
-                "🐕 Demo mode activated! I'm giving sample responses. Real Alberto needs the bridge server running to help with actual coding tasks.",
-                "🐕 Hi! I'm Alberto's demo mode. The real me can help with coding, file operations, and more when the bridge server is connected!",
-            ]
-            
-            import random
-            response = random.choice(demo_responses)
-            
-            return ChatResponse(
-                success=True,
-                response=response,
-                execution_time=0.1,
+            # Connection error when no API key is configured
+            raise HTTPException(
+                status_code=503, 
+                detail="[CONNECTION_ERROR] Not connected to Alberto - No model API key configured"
             )
             
         try:
@@ -127,9 +131,9 @@ def create_app() -> FastAPI:
         if not _pup_client:
             return {
                 "available": False,
-                "version": "0.1.0 (demo mode)",
+                "version": "0.1.0",
                 "connected": False,
-                "message": "Bridge server not connected"
+                "message": "[CONNECTION_ERROR] Not connected to Alberto - No model API key configured"
             }
             
         try:
