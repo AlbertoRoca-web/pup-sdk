@@ -21,15 +21,59 @@ jobs:
       - name: Install dependencies
         run: pip install huggingface_hub
       
-      - name: Deploy to Space
+      - name: Generate hf-space files
+        run: |
+          mkdir -p hf-space
+          
+          # Create requirements.txt
+          echo 'fastapi' > hf-space/requirements.txt
+          echo 'uvicorn[standard]' >> hf-space/requirements.txt
+          
+          # Create app.py
+          cat > hf-space/app.py << 'EOF'
+from fastapi import FastAPI
+app = FastAPI()
+
+@app.get("/")
+def greet_json():
+    return {"Hello": "World!"}
+EOF
+          
+          # Create Dockerfile
+          cat > hf-space/Dockerfile << 'EOF'
+FROM python:3.9
+RUN useradd -m -u 1000 user
+USER user
+ENV PATH="/home/user/.local/bin:$PATH"
+WORKDIR /app
+COPY --chown=user ./requirements.txt requirements.txt
+RUN pip install --no-cache-dir --upgrade -r requirements.txt
+COPY --chown=user . /app
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
+EOF
+      
+      - name: Upload hf-space folder to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HUGGINGPUP }}
+          HUGGINGFACE_HUB_TOKEN: ${{ secrets.HUGGINGPUP }}
         run: |
-          from huggingface_hub import HfApi
-          api = HfApi(token="${HF_TOKEN}")
-          api.upload_folder(
-              folder_path=".",
-              repo_id="AlbertoRoca96-web/pup-sdk",
-              repo_type="space"
-          )
-        shell: python
+          python - << 'PY'
+import os
+from huggingface_hub import HfApi
+
+token = os.environ.get('HF_TOKEN') or os.environ.get('HUGGINGFACE_HUB_TOKEN')
+assert token, 'HF_TOKEN/HUGGINGFACE_HUB_TOKEN is not set in env'
+
+api = HfApi(token=token)
+
+repo_id = 'AlbertoRoca96-web/pup-sdk'
+local_dir = 'hf-space'
+
+commit_info = api.upload_folder(
+    repo_id=repo_id,
+    repo_type='space',
+    folder_path=local_dir,
+    commit_message='🐶 Pup SDK auto-deploy from GitHub Actions'
+)
+print('Uploaded commit:', commit_info.commit_url)
+PY
