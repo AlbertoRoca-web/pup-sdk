@@ -34,20 +34,25 @@ async def lifespan(app: FastAPI):
             print("🐕 Alberto running in demo mode - no API key configured")
         else:
             print("🐕 Alberto client created with API key")
-            # In HuggingFace Space mode, we don't connect to external Alberto server
-            # The web app itself acts as the Alberto interface
-            alberto_url = os.environ.get("ALBERTO_API_URL")
-            if alberto_url:
-                # Only connect if we have an external Alberto server URL
-                _pup_client.base_url = alberto_url.rstrip("/")
-                await _pup_client.connect()
-                # Test the connection separately
-                if await _pup_client.test_connection():
-                    print("🐕 Alberto connected to external server successfully!")
+            # Always connect when keys are present, regardless of external server
+            try:
+                # Override base_url if ALBERTO_API_URL is set
+                alberto_url = os.environ.get("ALBERTO_API_URL")
+                if alberto_url:
+                    _pup_client.base_url = alberto_url.rstrip("/")
+                    print(f"🔗 Connecting to external Alberto server: {alberto_url}")
                 else:
-                    print("⚠️ Alberto client created but external server unreachable")
-            else:
-                print("🐕 Alberto running in direct LLM mode (no external server)")
+                    print("🔗 Connecting in direct LLM mode")
+                
+                # Always connect() for non-demo clients
+                await _pup_client.connect()
+                print("🐕 Alberto client connected successfully!")
+            except Exception as connect_error:
+                print(f"⚠️ Failed to connect Alberto client: {connect_error}")
+                # Fall back to demo mode on connection failure
+                _pup_client.demo_mode = True
+                _pup_client.is_connected = False
+                print("🔄 Falling back to demo mode due to connection failure")
         yield
     except Exception as e:
         print(f"❌ Failed to initialize Alberto client: {e}")
@@ -121,6 +126,18 @@ def create_app() -> FastAPI:
                 execution_time=0.1,
             )
             
+        # Ensure client is connected before sending chat
+        if not client.demo_mode and not client.is_connected:
+            try:
+                await client.connect()
+                print("🔄 Reconnected client for chat request")
+            except Exception as connect_error:
+                return {
+                    "success": False,
+                    "response": "Connection failed. Please try again later.",
+                    "error": "connection_failed"
+                }
+        
         try:
             response = await client.chat(
                 message=request.message,
@@ -130,11 +147,34 @@ def create_app() -> FastAPI:
             )
             return response
         except PupTimeoutError:
-            raise HTTPException(status_code=408, detail="Request timeout")
+            return {
+                "success": False,
+                "response": "Request timeout. Please try again.",
+                "error": "timeout"
+            }
         except PupConnectionError:
-            raise HTTPException(status_code=503, detail="Alberto is unavailable")
+            # Try to reconnect once more
+            try:
+                await client.connect()
+                response = await client.chat(
+                    message=request.message,
+                    context=request.context,
+                    include_reasoning=request.include_reasoning,
+                    auto_execute=request.auto_execute,
+                )
+                return response
+            except Exception:
+                return {
+                    "success": False,
+                    "response": "Connection temporarily unavailable. Please try again.",
+                    "error": "connection_failed"
+                }
         except PupError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            return {
+                "success": False,
+                "response": "An error occurred while processing your request.",
+                "error": "processing_error"
+            }
             
     @app.get("/api/status")
     async def status_endpoint():
@@ -150,6 +190,19 @@ def create_app() -> FastAPI:
                 "message": "No client available"
             }
             
+        # Check if client needs connection
+        if not client.demo_mode and not client.is_connected:
+            try:
+                await client.connect()
+                print("🔄 Reconnected client for status check")
+            except Exception as connect_error:
+                return {
+                    "available": False,
+                    "connected": False,
+                    "demo_mode": client.demo_mode,
+                    "error": "connection_failed"
+                }
+        
         try:
             status = await client.get_status()
             result = status.model_dump()
@@ -160,11 +213,12 @@ def create_app() -> FastAPI:
             })
             return result
         except Exception as e:
+            # Don't expose internal PupClient error messages
             return {
                 "available": False,
-                "error": str(e),
                 "connected": client.is_connected,
                 "demo_mode": client.demo_mode,
+                "error": "connection_failed"
             }
             
     @app.get("/api/capabilities")
