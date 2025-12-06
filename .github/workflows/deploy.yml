@@ -38,17 +38,16 @@ jobs:
           cd ..
 
       - name: Generate and sync Pup SDK app files
-        env:
-          HF_TOKEN: ${{ secrets.HUGGINGPUP }}
         run: |
           echo "📝 Generating Pup SDK app files..."
 
-          # requirements.txt for Pup SDK Space (only real PyPI deps)
+          # requirements.txt for Pup SDK Space (include aiohttp)
           cat > requirements.txt << 'EOF'
           fastapi
           uvicorn[standard]
           jinja2
           python-multipart
+          aiohttp
           EOF
 
           # app.py that launches real Alberto
@@ -62,7 +61,7 @@ jobs:
               launch_web(host=host, port=port)
           EOF
 
-          # Dockerfile for Space (no broken \n, no editable install)
+          # Dockerfile for Space (no editable install, no stray \n)
           cat > Dockerfile << 'EOF'
           FROM python:3.9
 
