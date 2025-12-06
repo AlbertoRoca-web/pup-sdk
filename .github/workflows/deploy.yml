@@ -69,6 +69,12 @@ jobs:
           CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
           EOF
 
+      - name: Push main to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HUGGINGPUP }}
+        run: |
+          git push -f https://AlbertoRoca96-web:$HF_TOKEN@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk main
+
       - name: Upload Alberto UI to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HUGGINGPUP }}
