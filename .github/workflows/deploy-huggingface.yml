@@ -1,0 +1,61 @@
+name: Deploy Alberto to HuggingFace Spaces
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Install Hugging Face Hub
+      run: |
+        pip install huggingface_hub
+        
+    - name: Deploy to HuggingFace Spaces
+      env:
+        HF_TOKEN: ${{ secrets.HUGGINGPUP }}
+      run: |
+        echo "🐕 Deploying Alberto to HuggingFace Spaces..."
+        
+        # Check if HF_TOKEN is set
+        if [ -z "$HF_TOKEN" ]; then
+          echo "❌ HUGGINGPUP secret not found in repository secrets"
+          echo "📝 Please add HUGGINGPUP secret to your GitHub repository secrets:"
+          echo "   1. Go to: https://github.com/AlbertoRoca-web/pup-sdk/settings/secrets/actions"
+          echo "   2. Click 'New repository secret'"
+          echo "   3. Name: HUGGINGPUP"
+          echo "   4. Value: your_huggingface_token_here"
+          echo "   5. Click 'Add secret'"
+          exit 1
+        fi
+        
+        echo "✅ HUGGINGPUP secret found (length: ${#HF_TOKEN})"
+        echo "🚀 Starting deployment..."
+        
+        # Upload to HuggingFace Spaces
+        huggingface-cli upload \
+          --repo-type space \
+          --repo-id AlbertoRoca96-web/pup-sdk \
+          --commit-message "🐕 Auto-deploy Alberto mobile interface" \
+          .
+          
+        if [ $? -eq 0 ]; then
+          echo "🎉 SUCCESS! Alberto deployed to HuggingFace Spaces!"
+          echo "🌐 Space URL: https://huggingface.co/spaces/AlbertoRoca96-web/pup-sdk"
+          echo "⏱️ Build starting now... wait 2-5 minutes"
+          echo "📱 Alberto will be live on mobile soon!"
+        else
+          echo "❌ Deployment failed! Check token permissions."
+          exit 1
+        fi

@@ -1,24 +1,11 @@
-# Core dependencies
+# Web framework
+fastapi>=0.95.0
+uvicorn[standard]>=0.20.0
+
+# For the pup-sdk web interface
 aiohttp>=3.8.0
 pydantic>=2.0.0
-fastapi>=0.95.0
-uvicorn>=0.20.0
-websockets>=11.0.0
-
-# Web interface
 jinja2>=3.1.0
 python-multipart>=0.0.6
-
-# CLI
+websockets>=11.0.0
 click>=8.0.0
-
-# For HuggingFace Spaces deployment
-# Include pup-sdk itself (will be installed from local package)
--e .
-
-# Optional for development
-black>=23.0.0
-ruff>=0.1.0
-pytest>=7.0.0
-pytest-asyncio>=0.21.0
-mypy>=1.0.0
