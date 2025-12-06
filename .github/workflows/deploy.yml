@@ -45,43 +45,43 @@ jobs:
 
           # requirements.txt for Pup SDK Space (only real PyPI deps)
           cat > requirements.txt << 'EOF'
-fastapi
-uvicorn[standard]
-jinja2
-python-multipart
-EOF
+          fastapi
+          uvicorn[standard]
+          jinja2
+          python-multipart
+          EOF
 
           # app.py that launches real Alberto
           cat > app.py << 'EOF'
-import os
-from pup_sdk.web import launch_web
+          import os
+          from pup_sdk.web import launch_web
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 7860))
-    host = os.environ.get("HOST", "0.0.0.0")
-    launch_web(host=host, port=port)
-EOF
+          if __name__ == "__main__":
+              port = int(os.environ.get("PORT", 7860))
+              host = os.environ.get("HOST", "0.0.0.0")
+              launch_web(host=host, port=port)
+          EOF
 
           # Dockerfile for Space (no broken \n, no editable install)
           cat > Dockerfile << 'EOF'
-FROM python:3.9
+          FROM python:3.9
 
-RUN useradd -m -u 1000 user
-USER user
-ENV PATH="/home/user/.local/bin:$PATH"
+          RUN useradd -m -u 1000 user
+          USER user
+          ENV PATH="/home/user/.local/bin:$PATH"
 
-WORKDIR /app
+          WORKDIR /app
 
-# Copy requirements first for better caching
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+          # Copy requirements first for better caching
+          COPY requirements.txt .
+          RUN pip install --no-cache-dir --upgrade pip && \
+              pip install --no-cache-dir -r requirements.txt
 
-# Copy the entire app (including pup_sdk)
-COPY . .
+          # Copy the entire app (including pup_sdk)
+          COPY . .
 
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
-EOF
+          CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
+          EOF
 
           # Copy static assets if they exist
           if [ -d "assets" ]; then
