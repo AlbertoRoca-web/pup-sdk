@@ -1,4 +1,4 @@
-name: Deploy Alberto to HuggingFace Spaces
+name: Deploy Pup SDK to HuggingFace Spaces
 
 on:
   push:
@@ -24,12 +24,14 @@ jobs:
           HF_TOKEN: ${{ secrets.HUGGINGPUP }}
         run: |
           rm -rf hf-space
-          git clone https://AlbertoRoca96-web:${HF_TOKEN}@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk hf-space
+          git clone https://AlbertoRoca-web:${HF_TOKEN}@huggingface.co/spaces/AlbertoRoca-web/pup-sdk hf-space
 
       - name: Sync files to HF Space
         run: |
           rsync -a --delete \
-            app.py Dockerfile requirements.txt README.md \
+            --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' --exclude='.DS_Store' \
+            app.py Dockerfile requirements.txt README.md .env.example pyproject.toml \
+            pup_sdk/ examples/ LICENSE \
             hf-space/
 
       - name: Commit & push to HF Space
@@ -41,12 +43,12 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to push."
           else
-            git commit -m "🐕 Alberto auto-deploy - Mobile interface with FastAPI
-Deploy Alberto mobile interface with FastAPI and Docker
-- Mobile-friendly chat interface
-- Touch-optimized design
-- Real-time responses with typing indicators
-- Sassy Alberto personality
-- Docker configuration for HuggingFace Spaces"
+            git commit -m "🐶 Pup SDK auto-deploy - $(date '+%Y-%m-%d %H:%M:%S')
+Deploy Pup SDK to HuggingFace Spaces
+- FastAPI backend with async support
+- Mobile-friendly web interface
+- OpenAI-powered code assistant
+- Dockerized deployment
+- Real-time streaming responses"
             git push
           fi
