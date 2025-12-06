@@ -74,17 +74,13 @@ jobs:
 
           # Copy requirements first for better caching
           COPY requirements.txt .
-          RUN pip install --no-cache-dir --upgrade pip && \
-              pip install --no-cache-dir -r requirements.txt
+          RUN pip install --no-cache-dir --upgrade pip && \n              pip install --no-cache-dir -r requirements.txt
 
           # Copy the entire pup-sdk package
           COPY . .
 
-          # Install the package itself
-          RUN pip install --no-cache-dir -e .
-
-          EXPOSE 7860
           CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7860"]
+          EOF
           EOF
 
           # Copy static assets if they exist
