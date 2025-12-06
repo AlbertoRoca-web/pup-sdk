@@ -349,7 +349,7 @@ async def status_endpoint():
 @app.get("/health")
 async def health_check():
     """Simple health check endpoint."""
-    return {"status": "healthy"}
+    return {"status": "healthy", "service": "Pup SDK"}
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 7860))

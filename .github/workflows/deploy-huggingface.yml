@@ -24,15 +24,20 @@ jobs:
           HF_TOKEN: ${{ secrets.HUGGINGPUP }}
         run: |
           rm -rf hf-space
+          echo "Cloning HF Space..."
           git clone https://AlbertoRoca-web:${HF_TOKEN}@huggingface.co/spaces/AlbertoRoca-web/pup-sdk hf-space
+          echo "Clone complete."
 
       - name: Sync files to HF Space
         run: |
+          echo "Syncing files to HF Space..."
           rsync -a --delete \
-            --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' --exclude='.DS_Store' \
-            app.py Dockerfile requirements.txt README.md .env.example pyproject.toml \
-            pup_sdk/ examples/ LICENSE \
+            --exclude='.git' --exclude='.github' --exclude='__pycache__' --exclude='*.pyc' \
+            --exclude='.DS_Store' --exclude='*.log' --exclude='.pytest_cache' \
+            app.py Dockerfile requirements.txt README.md .env.example pyproject.toml LICENSE \
+            pup_sdk/ examples/ \
             hf-space/
+          echo "File sync complete."
 
       - name: Commit & push to HF Space
         env:
@@ -41,14 +46,25 @@ jobs:
           cd hf-space
           git add -A
           if git diff --cached --quiet; then
-            echo "No changes to push."
+            echo "✅ No changes to push."
           else
+            echo "📝 Committing changes to HF Space..."
             git commit -m "🐶 Pup SDK auto-deploy - $(date '+%Y-%m-%d %H:%M:%S')
 Deploy Pup SDK to HuggingFace Spaces
 - FastAPI backend with async support
-- Mobile-friendly web interface
+- Mobile-friendly web interface  
 - OpenAI-powered code assistant
-- Dockerized deployment
-- Real-time streaming responses"
+- Dockerized deployment with gunicorn
+- Real-time streaming responses
+- Health check endpoint added"
+            echo "🚀 Pushing to HF Space..."
             git push
+            echo "✅ Deployment complete!"
           fi
+
+      - name: Deployment Summary
+        run: |
+          echo "🎯 Pup SDK Deployment Summary"
+          echo "📍 Space URL: https://huggingface.co/spaces/AlbertoRoca-web/pup-sdk"
+          echo "🕐 Deployed at: $(date '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "🐶 Pup SDK is ready to assist with coding challenges!"
