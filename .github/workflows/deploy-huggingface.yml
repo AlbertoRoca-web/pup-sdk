@@ -2,55 +2,51 @@ name: Deploy Alberto to HuggingFace Spaces
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-      
-    - name: Deploy to HuggingFace Spaces
-      env:
-        HF_TOKEN: ${{ secrets.HUGGINGPUP }}
-      run: |
-        echo "Deploying Alberto to HuggingFace Spaces..."
-        
-        if [ -z "$HF_TOKEN" ]; then
-          echo "HUGGINGPUP secret not found"
-          exit 1
-        fi
-        
-        echo "Found HUGGINGPUP token"
-        
-        # Clone the space
-        git clone https://$HF_TOKEN@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk
-        
-        # Remove existing git to avoid conflicts
-        rm -rf pup-sdk/.git
-        
-        # Copy deployment files
-        cp app.py Dockerfile requirements.txt README.md pup-sdk/
-        
-        # Initialize git repo FIRST
-        cd pup-sdk
-        git init
-        
-        # THEN set user config
-        git config user.name "github-actions"
-        git config user.email "actions@github.com"
-        
-        # Setup remote
-        git remote add origin https://$HF_TOKEN@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk
-        
-        # Add and commit files
-        git add .
-        git commit -m "Deploy Alberto mobile interface"
-        
-        # Push to deploy
-        git push origin main --force
-        
-        echo "SUCCESS! Alberto deployed!"
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git for commit
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@users.noreply.github.com"
+
+      - name: Clone HF Space repo
+        env:
+          HF_TOKEN: ${{ secrets.HUGGINGPUP }}
+        run: |
+          rm -rf hf-space
+          git clone https://AlbertoRoca96-web:${HF_TOKEN}@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk hf-space
+
+      - name: Sync files to HF Space
+        run: |
+          rsync -a --delete \
+            app.py Dockerfile requirements.txt README.md \
+            hf-space/
+
+      - name: Commit & push to HF Space
+        env:
+          HF_TOKEN: ${{ secrets.HUGGINGPUP }}
+        run: |
+          cd hf-space
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to push."
+          else
+            git commit -m "🐕 Alberto auto-deploy - Mobile interface with FastAPI
+Deploy Alberto mobile interface with FastAPI and Docker
+- Mobile-friendly chat interface
+- Touch-optimized design
+- Real-time responses with typing indicators
+- Sassy Alberto personality
+- Docker configuration for HuggingFace Spaces"
+            git push
+          fi
