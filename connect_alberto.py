@@ -3,7 +3,7 @@ from pup_sdk.client import PupClient
 
 # Configuration
 SPACE_URL = "https://albertoroca96-web-pup-sdk.hf.space"
-API_KEY = os.getenv("OPENAI_API_KEY")
+API_KEY = os.getenv("OPEN_API_KEY")
 MODEL = "gpt-4o-mini"
 
 print("🐶 Connecting Alberto the Code Puppy...")
@@ -12,8 +12,8 @@ print(f"🤖 Model: {MODEL}")
 print(f"🔑 API Key: {'✅ Set' if API_KEY else '❌ Missing'}")
 
 if not API_KEY:
-    print("❌ Error: OPENAI_API_KEY environment variable is not set!")
-    print("💡 Run: export OPENAI_API_KEY=your_api_key_here")
+    print("❌ Error: OPEN_API_KEY environment variable is not set!")
+    print("💡 Run: export OPEN_API_KEY=your_api_key_here")
     exit(1)
 
 try:
@@ -36,5 +36,5 @@ except Exception as e:
     print(f"❌ Error connecting to Alberto: {e}")
     print("🔍 Check if:")
     print("   • The Space is running: https://huggingface.co/spaces/AlbertoRoca96-web/pup-sdk")
-    print("   • Your OPENAI_API_KEY is valid")
+    print("   • Your OPEN_API_KEY is valid")
     print("   • Network connectivity is working")

@@ -339,7 +339,7 @@ class PupClient:
         # Read API keys from environment if not provided
         if not api_key:
             syn_key = os.environ.get("SYN_API_KEY")
-            openai_key = os.environ.get("OPENAI_API_KEY")
+            openai_key = os.environ.get("OPEN_API_KEY")
             
             if syn_key:
                 api_key = syn_key
@@ -348,7 +348,7 @@ class PupClient:
                 api_key = openai_key
                 logger.info("Using OpenAI provider")
             else:
-                raise ValueError("No model API key configured. Set SYN_API_KEY or OPENAI_API_KEY environment variable.")
+                raise ValueError("No model API key configured. Set SYN_API_KEY or OPEN_API_KEY environment variable.")
         
         client = cls(base_url=base_url, api_key=api_key, timeout=timeout)
         await client.connect()
@@ -362,7 +362,7 @@ class PupClient:
     ) -> "PupClient":
         """Create client instance from environment variables (secure, no logging)."""
         syn_key = os.environ.get("SYN_API_KEY")
-        openai_key = os.environ.get("OPENAI_API_KEY")
+        openai_key = os.environ.get("OPEN_API_KEY")
         
         # Check for valid keys (not empty strings)
         has_syn_key = syn_key and syn_key.strip()
