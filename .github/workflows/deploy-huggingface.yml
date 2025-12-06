@@ -35,11 +35,15 @@ jobs:
         # Copy deployment files
         cp app.py Dockerfile requirements.txt README.md pup-sdk/
         
-        # Setup git user
+        # Initialize git repo FIRST
         cd pup-sdk
+        git init
+        
+        # THEN set user config
         git config user.name "github-actions"
         git config user.email "actions@github.com"
-        git init
+        
+        # Setup remote
         git remote add origin https://$HF_TOKEN@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk
         
         # Add and commit files
