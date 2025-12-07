@@ -87,17 +87,16 @@ class PupClient:
             return False
 
         try:
-            # Simple health check with timeout - no status call to avoid recursion
             timeout = aiohttp.ClientTimeout(total=5)
             async with aiohttp.ClientSession(timeout=timeout) as test_session:
                 headers: Dict[str, str] = {}
                 if self.api_key:
                     headers["Authorization"] = f"Bearer {self.api_key}"
 
-                async with test_session.get(
-                    f"{self.base_url}/health",
-                    headers=headers,
-                ) as response:
+                # Try status endpoint first ( Worker implements /api/v1/status )
+                status_url = f"{self.base_url}/api/v1/status"
+
+                async with test_session.get(status_url, headers=headers) as response:
                     success = response.status == 200
                     if success:
                         logger.info(
@@ -174,7 +173,9 @@ class PupClient:
         except aiohttp.ClientError as e:
             raise PupConnectionError(f"Connection error: {e}")
 
+    # ------------------------------------------------------------------
     # Status and health methods
+    # ------------------------------------------------------------------
     async def get_status(self) -> PupStatus:
         """Get Alberto's current status (cached for 30 seconds)."""
         now = datetime.now()
@@ -198,7 +199,9 @@ class PupClient:
         except Exception:
             return False
 
+    # ------------------------------------------------------------------
     # Chat methods
+    # ------------------------------------------------------------------
     async def say_woof(self, message: str, **kwargs) -> ChatResponse:
         """Send a message to Alberto and get a response."""
         request = ChatRequest(message=message, **kwargs)
@@ -220,7 +223,9 @@ class PupClient:
             auto_execute=auto_execute,
         )
 
+    # ------------------------------------------------------------------
     # File operation methods
+    # ------------------------------------------------------------------
     async def list_files(
         self,
         directory: str = ".",
@@ -312,7 +317,9 @@ class PupClient:
         response = await self._request("GET", "/search", params=params)
         return [SearchResult(**item) for item in response.get("results", [])]
 
+    # ------------------------------------------------------------------
     # Shell command methods
+    # ------------------------------------------------------------------
     async def run_command(
         self,
         command: str,
@@ -330,7 +337,9 @@ class PupClient:
         response = await self._request("POST", "/shell", data=shell_cmd)
         return ShellCommandResult(**response)
 
+    # ------------------------------------------------------------------
     # Agent methods
+    # ------------------------------------------------------------------
     async def invoke_agent(
         self,
         agent_name: str,
@@ -351,7 +360,9 @@ class PupClient:
         response = await self._request("GET", "/agents")
         return response.get("agents", [])
 
+    # ------------------------------------------------------------------
     # Utility methods
+    # ------------------------------------------------------------------
     async def get_capabilities(self) -> List[str]:
         """Get list of Alberto's capabilities."""
         status = await self.get_status()
@@ -370,9 +381,9 @@ class PupClient:
 
             await asyncio.sleep(1)
 
-    # -------------------------------------------------------------------------
+    # ------------------------------------------------------------------
     # Construction helpers
-    # -------------------------------------------------------------------------
+    # ------------------------------------------------------------------
     @classmethod
     async def create_and_connect(
         cls,
@@ -390,7 +401,6 @@ class PupClient:
         3. base_url argument.
         4. Default http://localhost:8080
         """
-        # Backend URL from env or arg
         backend_url = (
             os.environ.get("ALBERTO_API_URL")
             or os.environ.get("PUP_BACKEND_URL")
@@ -440,7 +450,6 @@ class PupClient:
         Demo mode is enabled only when no valid SYN_API_KEY or OPEN_API_KEY
         is present; otherwise the client runs in full mode.
         """
-        # Backend URL: prefer env vars, then explicit arg, then default localhost
         backend_url = (
             os.environ.get("ALBERTO_API_URL")
             or os.environ.get("PUP_BACKEND_URL")
