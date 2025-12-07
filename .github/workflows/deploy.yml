@@ -2,7 +2,7 @@ name: Deploy to HuggingFace
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
 
 permissions:
   contents: write
@@ -17,87 +17,36 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
+      - name: Install huggingface_hub
         run: pip install huggingface_hub
 
-      - name: Clone HuggingFace Space with full history
+      - name: Clone HuggingFace Space
         env:
           HF_TOKEN: ${{ secrets.HUGGINGPUP }}
         run: |
-          echo "🔗 Cloning HuggingFace Space with full history..."
+          echo "🔗 Cloning HuggingFace Space..."
           rm -rf hf-space
-          git clone https://AlbertoRoca96-web:${HF_TOKEN}@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk hf-space
+          git clone "https://AlbertoRoca96-web:${HF_TOKEN}@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk" hf-space
           cd hf-space
           echo "📁 Space repo contents:"
           ls -la
-          cd ..
 
-      - name: Generate and sync Pup SDK app files
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPEN_API_KEY }}
-          SYN_API_KEY: ${{ secrets.SYN_API_KEY }}
+      - name: Sync project files into Space repo
         run: |
-          echo "📝 Generating Pup SDK app files..."
+          echo "💾 Syncing files into hf-space..."
+          # adjust these paths to match what you actually want in the Space
+          cp -v app.py hf-space/
+          cp -v requirements.txt hf-space/
+          cp -v Dockerfile hf-space/ || true
 
-          # requirements.txt for Pup SDK Space (include all deps)
-          cat > requirements.txt << 'EOF'
-          fastapi
-          uvicorn[standard]
-          jinja2
-          python-multipart
-          aiohttp
-          openai
-          EOF
-
-          # app.py that launches real Alberto
-          cat > app.py << 'EOF'
-          import os
-          from pup_sdk.web import launch_web
-
-          if __name__ == "__main__":
-              port = int(os.environ.get("PORT", 7860))
-              host = os.environ.get("HOST", "0.0.0.0")
-              launch_web(host=host, port=port)
-          EOF
-
-          # Dockerfile for Space (cmd: python app.py)
-          cat > Dockerfile << 'EOF'
-          FROM python:3.9
-
-          RUN useradd -m -u 1000 user
-          USER user
-          ENV PATH="/home/user/.local/bin:$PATH"
-
-          WORKDIR /app
-
-          # Copy requirements first for better caching
-          COPY requirements.txt .
-          RUN pip install --no-cache-dir --upgrade pip && \
-              pip install --no-cache-dir -r requirements.txt
-
-          # Copy the entire app (including pup_sdk)
-          COPY . .
-
-          CMD ["python", "app.py"]
-          EOF
-
-          # Copy static assets if they exist
-          if [ -d "assets" ]; then
-            cp -r assets/* hf-space/ 2>/dev/null || true
+          # copy the SDK package itself
+          if [ -d "pup_sdk" ]; then
+            rsync -av --delete pup_sdk/ hf-space/pup_sdk/
           fi
 
-          # Sync files to hf-space
-          echo "💾 Syncing files to Space repository..."
-          cp -v requirements.txt app.py Dockerfile hf-space/
-
-          # Copy pup_sdk package to hf-space (so import pup_sdk.web works)
-          if [ -d "pup_sdk" ]; then
-            cp -rv pup_sdk/ hf-space/
+          # if you have templates/static/etc outside pup_sdk, copy them too
+          if [ -d "pup_sdk/web" ]; then
+            echo "✅ pup_sdk/web present"
           fi
 
           echo "📋 Updated hf-space contents:"
@@ -109,22 +58,16 @@ jobs:
         run: |
           cd hf-space
 
-          # Configure git for the Space repository
-          git config user.name "Alberto Code Puppy"
+          git config user.name  "Alberto Code Puppy"
           git config user.email "alberto@code-puppy.ai"
 
-          # Add all changes
-          echo "📝 Adding changes to git..."
           git add -A
 
-          # Check if there are changes to commit
           if git diff --cached --quiet; then
             echo "ℹ️ No changes to commit"
           else
-            echo "💾 Committing changes..."
-            git commit -m "Sync Pup SDK app files from GitHub main"
-
-            echo "🚀 Pushing to HuggingFace Space..."
+            echo "💾 Committing and pushing..."
+            git commit -m "Sync from GitHub main"
             git push
           fi
 
