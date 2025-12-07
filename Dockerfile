@@ -5,7 +5,7 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 
-# Node deps
+# Install Node deps
 COPY package*.json ./
 RUN npm ci
 
@@ -21,14 +21,14 @@ RUN npm run build
 # -------------------------------
 FROM python:3.9-slim
 
-# Keep logs unbuffered & pip lean
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
-# Default env names your app will read.
-# **Values are injected at runtime** by HF or `docker run -e`.
+# These are just *names*. Values are injected at runtime
+# (via docker -e or HuggingFace Space "Secrets").
 ENV OPEN_API_KEY="" \
-    SYN_API_KEY=""
+    SYN_API_KEY="" \
+    HUGGINGPUP=""
 
 # Non-root user
 RUN useradd -m -u 1000 user
@@ -37,9 +37,9 @@ ENV PATH="/home/user/.local/bin:$PATH"
 
 WORKDIR /app
 
-# Install Python deps
+# Python deps
 COPY --chown=user requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir --upgrade -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Static CSS built in stage 1
 COPY --from=frontend-builder --chown=user /app/pup_sdk/web/static ./pup_sdk/web/static
@@ -47,7 +47,7 @@ COPY --from=frontend-builder --chown=user /app/pup_sdk/web/static ./pup_sdk/web/
 # App source
 COPY --chown=user . .
 
-# HuggingFace will hit 7860 by default
+# HF routes 7860 → your container
 EXPOSE 7860
 
 # FastAPI app entrypoint
