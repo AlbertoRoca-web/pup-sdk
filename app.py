@@ -11,6 +11,7 @@ app = create_app()
 async def debug_env():
     return {
         "has_OPEN_API_KEY": bool(os.getenv("OPEN_API_KEY")),
+        "has_OPENAI_API_KEY": bool(os.getenv("OPENAI_API_KEY")),
         "has_SYN_API_KEY": bool(os.getenv("SYN_API_KEY")),
         "has_HUGGINGPUP": bool(os.getenv("HUGGINGPUP")),
     }
