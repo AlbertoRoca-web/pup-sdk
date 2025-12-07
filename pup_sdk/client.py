@@ -51,8 +51,54 @@ class PupClient:
         self._status_cache: Optional[PupStatus] = None
         self._cache_timestamp: Optional[datetime] = None
         self.demo_mode = demo_mode
+
+        # Cloudflare Access integration (optional)
+        # - PUP_CF_ACCESS_JWT: raw JWT to send as CF-Access-Jwt-Assertion
+        # - PUP_CF_ACCESS_CLIENT_ID / PUP_CF_ACCESS_CLIENT_SECRET: service token pair
+        self._cf_access_jwt: Optional[str] = os.environ.get("PUP_CF_ACCESS_JWT")
+        self._cf_client_id: Optional[str] = os.environ.get(
+            "PUP_CF_ACCESS_CLIENT_ID"
+        )
+        self._cf_client_secret: Optional[str] = os.environ.get(
+            "PUP_CF_ACCESS_CLIENT_SECRET"
+        )
+
         # Simple flag: "connected" means we have an API key and are not explicitly in demo mode
         self._is_connected = bool(api_key) and not demo_mode
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _build_headers(self) -> Dict[str, str]:
+        """
+        Build the base headers for all HTTP requests.
+
+        Includes:
+        - JSON content type
+        - Authorization: Bearer <api_key>  (if api_key is set)
+        - Cloudflare Access headers (JWT or service token) when configured
+        """
+        headers: Dict[str, str] = {"Content-Type": "application/json"}
+
+        # Core API auth (OpenAI / Syn key)
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+
+        # Cloudflare Access (JWT)
+        if self._cf_access_jwt:
+            headers["CF-Access-Jwt-Assertion"] = self._cf_access_jwt
+
+        # Cloudflare Access (service token)
+        if self._cf_client_id and self._cf_client_secret:
+            headers["CF-Access-Client-Id"] = self._cf_client_id
+            headers["CF-Access-Client-Secret"] = self._cf_client_secret
+
+        return headers
+
+    # ------------------------------------------------------------------
+    # Context-manager lifecycle
+    # ------------------------------------------------------------------
 
     async def __aenter__(self):
         await self.connect()
@@ -61,15 +107,17 @@ class PupClient:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
 
+    # ------------------------------------------------------------------
+    # Connection management
+    # ------------------------------------------------------------------
+
     async def connect(self) -> None:
         """Initialize the HTTP session - minimal and idempotent."""
         # Nothing to do if already connected
         if self._session is not None:
             return
 
-        headers = {"Content-Type": "application/json"}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
+        headers = self._build_headers()
 
         self._session = aiohttp.ClientSession(
             base_url=self.base_url,
@@ -79,7 +127,16 @@ class PupClient:
 
         # Mark as connected - simple flag flip only
         self._is_connected = True
-        logger.info("🐕 Connected client session for Alberto at %s", self.base_url)
+
+        has_cf = bool(
+            self._cf_access_jwt
+            or (self._cf_client_id and self._cf_client_secret)
+        )
+        logger.info(
+            "🐕 Connected client session for Alberto at %s (Cloudflare Access=%s)",
+            self.base_url,
+            "on" if has_cf else "off",
+        )
 
     async def test_connection(self) -> bool:
         """Test the connection with a lightweight check (no recursion)."""
@@ -87,16 +144,15 @@ class PupClient:
             return False
 
         try:
+            # Simple health check with timeout - no status call to avoid recursion
             timeout = aiohttp.ClientTimeout(total=5)
             async with aiohttp.ClientSession(timeout=timeout) as test_session:
-                headers: Dict[str, str] = {}
-                if self.api_key:
-                    headers["Authorization"] = f"Bearer {self.api_key}"
+                headers = self._build_headers()
 
-                # Try status endpoint first ( Worker implements /api/v1/status )
-                status_url = f"{self.base_url}/api/v1/status"
-
-                async with test_session.get(status_url, headers=headers) as response:
+                async with test_session.get(
+                    f"{self.base_url}/health",
+                    headers=headers,
+                ) as response:
                     success = response.status == 200
                     if success:
                         logger.info(
@@ -132,6 +188,10 @@ class PupClient:
         if self._session is None:
             raise PupConnectionError("Not connected to Alberto. Call connect() first.")
         return self._session
+
+    # ------------------------------------------------------------------
+    # Core request helper
+    # ------------------------------------------------------------------
 
     async def _request(
         self,
@@ -176,6 +236,7 @@ class PupClient:
     # ------------------------------------------------------------------
     # Status and health methods
     # ------------------------------------------------------------------
+
     async def get_status(self) -> PupStatus:
         """Get Alberto's current status (cached for 30 seconds)."""
         now = datetime.now()
@@ -202,6 +263,7 @@ class PupClient:
     # ------------------------------------------------------------------
     # Chat methods
     # ------------------------------------------------------------------
+
     async def say_woof(self, message: str, **kwargs) -> ChatResponse:
         """Send a message to Alberto and get a response."""
         request = ChatRequest(message=message, **kwargs)
@@ -226,6 +288,7 @@ class PupClient:
     # ------------------------------------------------------------------
     # File operation methods
     # ------------------------------------------------------------------
+
     async def list_files(
         self,
         directory: str = ".",
@@ -320,6 +383,7 @@ class PupClient:
     # ------------------------------------------------------------------
     # Shell command methods
     # ------------------------------------------------------------------
+
     async def run_command(
         self,
         command: str,
@@ -340,6 +404,7 @@ class PupClient:
     # ------------------------------------------------------------------
     # Agent methods
     # ------------------------------------------------------------------
+
     async def invoke_agent(
         self,
         agent_name: str,
@@ -363,6 +428,7 @@ class PupClient:
     # ------------------------------------------------------------------
     # Utility methods
     # ------------------------------------------------------------------
+
     async def get_capabilities(self) -> List[str]:
         """Get list of Alberto's capabilities."""
         status = await self.get_status()
@@ -384,6 +450,7 @@ class PupClient:
     # ------------------------------------------------------------------
     # Construction helpers
     # ------------------------------------------------------------------
+
     @classmethod
     async def create_and_connect(
         cls,
@@ -401,6 +468,7 @@ class PupClient:
         3. base_url argument.
         4. Default http://localhost:8080
         """
+        # Backend URL from env or arg
         backend_url = (
             os.environ.get("ALBERTO_API_URL")
             or os.environ.get("PUP_BACKEND_URL")
@@ -450,6 +518,7 @@ class PupClient:
         Demo mode is enabled only when no valid SYN_API_KEY or OPEN_API_KEY
         is present; otherwise the client runs in full mode.
         """
+        # Backend URL: prefer env vars, then explicit arg, then default localhost
         backend_url = (
             os.environ.get("ALBERTO_API_URL")
             or os.environ.get("PUP_BACKEND_URL")
