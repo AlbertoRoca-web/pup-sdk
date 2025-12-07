@@ -1,0 +1,12 @@
+name = "pup-sdk-backend"
+main = "worker.js"
+compatibility_date = "2025-12-07"
+
+# Optional: route if you attach it to a zone later
+# routes = ["your-domain.com/*"]
+
+[vars]
+# These will be filled from your Cloudflare dashboard env vars
+# Just listing them here so Wrangler knows they exist
+OPEN_API_KEY = ""
+SYN_API_KEY = ""
