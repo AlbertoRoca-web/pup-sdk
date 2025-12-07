@@ -1,5 +1,5 @@
 name = "pup-sdk"
-main = "worker.mjs"
+main = "src/worker.mjs"
 compatibility_date = "2024-12-01"
 
 # If Cloudflare added account_id/project_id for you, keep them
