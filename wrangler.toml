@@ -1,12 +1,14 @@
 name = "pup-sdk"
-main = "src/worker.ts"
-compatibility_date = "2025-12-07"
+main = "worker.mjs"
+compatibility_date = "2024-12-01"
 
-# Optional: route if you attach it to a zone later
-# routes = ["your-domain.com/*"]
+# If Cloudflare added account_id/project_id for you, keep them
+# account_id = "xxxxxxxxxxxxxxxxxxxx"
+# workers_dev = true
 
 [vars]
-# These will be filled from your Cloudflare dashboard env vars
-# Just listing them here so Wrangler knows they exist
+# These *defaults* are only for local/dev; in production you already
+# configured OPEN_API_KEY / SYN_API_KEY in the Cloudflare dashboard.
+# You can leave them blank or remove this block if you prefer.
 OPEN_API_KEY = ""
 SYN_API_KEY = ""
