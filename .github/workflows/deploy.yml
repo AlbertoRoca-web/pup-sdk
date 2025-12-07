@@ -4,9 +4,6 @@ on:
   push:
     branches: [ main ]
 
-permissions:
-  contents: write
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -17,8 +14,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install huggingface_hub
-        run: pip install huggingface_hub
+      - name: Install rsync
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rsync
 
       - name: Clone HuggingFace Space
         env:
@@ -28,29 +27,26 @@ jobs:
           rm -rf hf-space
           git clone "https://AlbertoRoca96-web:${HF_TOKEN}@huggingface.co/spaces/AlbertoRoca96-web/pup-sdk" hf-space
           cd hf-space
-          echo "📁 Space repo contents:"
+          echo "📁 Space repo contents (before sync):"
           ls -la
 
       - name: Sync project files into Space repo
         run: |
+          set -e
           echo "💾 Syncing files into hf-space..."
-          # adjust these paths to match what you actually want in the Space
-          cp -v app.py hf-space/
-          cp -v requirements.txt hf-space/
-          cp -v Dockerfile hf-space/ || true
 
-          # copy the SDK package itself
-          if [ -d "pup_sdk" ]; then
-            rsync -av --delete pup_sdk/ hf-space/pup_sdk/
-          fi
+          # Backend
+          cp -v app.py requirements.txt Dockerfile hf-space/
 
-          # if you have templates/static/etc outside pup_sdk, copy them too
-          if [ -d "pup_sdk/web" ]; then
-            echo "✅ pup_sdk/web present"
-          fi
+          # Pup SDK package
+          rsync -av --delete pup_sdk/ hf-space/pup_sdk/
+
+          # Frontend build files expected by Dockerfile
+          cp -v package*.json vite.config.js tailwind.config.js hf-space/
+          rsync -av --delete frontend/ hf-space/frontend/
 
           echo "📋 Updated hf-space contents:"
-          ls -la hf-space/
+          ls -R hf-space/
 
       - name: Commit and push to HuggingFace Space
         env:
