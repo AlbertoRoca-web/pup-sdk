@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 class PupClient:
     """Async client for interacting with Alberto the code puppy."""
-    
+
     def __init__(
         self,
         base_url: str = "http://localhost:8080",
@@ -43,6 +43,7 @@ class PupClient:
         timeout: int = 60,
         demo_mode: bool = False,
     ):
+        # Normalize base URL by stripping trailing slash
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.timeout = aiohttp.ClientTimeout(total=timeout)
@@ -50,54 +51,69 @@ class PupClient:
         self._status_cache: Optional[PupStatus] = None
         self._cache_timestamp: Optional[datetime] = None
         self.demo_mode = demo_mode
+        # Simple flag: "connected" means we have an API key and are not explicitly in demo mode
         self._is_connected = bool(api_key) and not demo_mode
-        
+
     async def __aenter__(self):
         await self.connect()
         return self
-        
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
-        
+
     async def connect(self) -> None:
         """Initialize the HTTP session - minimal and idempotent."""
         # Nothing to do if already connected
         if self._session is not None:
             return
-            
+
         headers = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
-            
+
         self._session = aiohttp.ClientSession(
             base_url=self.base_url,
             headers=headers,
             timeout=self.timeout,
         )
-        
+
         # Mark as connected - simple flag flip only
         self._is_connected = True
-        
+        logger.info("🐕 Connected client session for Alberto at %s", self.base_url)
+
     async def test_connection(self) -> bool:
         """Test the connection with a lightweight check (no recursion)."""
         if self._session is None:
             return False
-            
+
         try:
             # Simple health check with timeout - no status call to avoid recursion
             timeout = aiohttp.ClientTimeout(total=5)
             async with aiohttp.ClientSession(timeout=timeout) as test_session:
-                async with test_session.get(f"{self.base_url}/health", headers={"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}) as response:
+                headers: Dict[str, str] = {}
+                if self.api_key:
+                    headers["Authorization"] = f"Bearer {self.api_key}"
+
+                async with test_session.get(
+                    f"{self.base_url}/health",
+                    headers=headers,
+                ) as response:
                     success = response.status == 200
                     if success:
-                        logger.info(f"🐕 Connection test successful for Alberto at {self.base_url}")
+                        logger.info(
+                            "🐕 Connection test successful for Alberto at %s",
+                            self.base_url,
+                        )
                     else:
-                        logger.warning(f"🐕 Connection test failed: HTTP {response.status}")
+                        logger.warning(
+                            "🐕 Connection test failed: HTTP %s",
+                            response.status,
+                        )
                     return success
         except Exception as e:
-            logger.warning(f"🐕 Connection test failed: {e}")
+            logger.warning("🐕 Connection test failed: %s", e)
             return False
-        
+
     async def close(self) -> None:
         """Close the HTTP session."""
         if self._session:
@@ -105,19 +121,19 @@ class PupClient:
             self._session = None
             self._is_connected = False
             logger.info("🐕 Disconnected from Alberto")
-            
+
     @property
     def is_connected(self) -> bool:
-        """Check if the client is connected."""
+        """Check if the client is connected (session open and not marked disconnected)."""
         return self._is_connected and self._session is not None
-    
+
     @property
     def session(self) -> aiohttp.ClientSession:
         """Get the HTTP session, raising error if not connected."""
         if self._session is None:
             raise PupConnectionError("Not connected to Alberto. Call connect() first.")
         return self._session
-        
+
     async def _request(
         self,
         method: str,
@@ -128,10 +144,10 @@ class PupClient:
         """Make an HTTP request to Alberto's API."""
         try:
             url = f"/api/v1{endpoint}"
-            
+
             if isinstance(data, BaseModel):
                 data = data.model_dump()
-                
+
             async with self.session.request(
                 method=method,
                 url=url,
@@ -144,37 +160,36 @@ class PupClient:
                     raise PupTimeoutError("Request timeout")
                 if response.status >= 500:
                     raise PupConnectionError(f"Server error: {response.status}")
-                    
+
                 response_data = await response.json()
-                
+
                 if response.status >= 400:
                     error_msg = response_data.get("error", "Unknown error")
                     raise PupError(error_msg)
-                    
+
                 return response_data
-                
+
         except asyncio.TimeoutError:
             raise PupTimeoutError(f"Request to {url} timed out")
         except aiohttp.ClientError as e:
             raise PupConnectionError(f"Connection error: {e}")
-            
+
     # Status and health methods
     async def get_status(self) -> PupStatus:
-        """Get Alberto's current status."""
-        # Cache status for 30 seconds
+        """Get Alberto's current status (cached for 30 seconds)."""
         now = datetime.now()
         if (
-            self._status_cache 
-            and self._cache_timestamp 
+            self._status_cache
+            and self._cache_timestamp
             and (now - self._cache_timestamp).total_seconds() < 30
         ):
             return self._status_cache
-            
+
         response = await self._request("GET", "/status")
         self._status_cache = PupStatus(**response)
         self._cache_timestamp = now
         return self._status_cache
-        
+
     async def health_check(self) -> bool:
         """Check if Alberto is available."""
         try:
@@ -182,14 +197,14 @@ class PupClient:
             return status.available
         except Exception:
             return False
-            
+
     # Chat methods
     async def say_woof(self, message: str, **kwargs) -> ChatResponse:
         """Send a message to Alberto and get a response."""
         request = ChatRequest(message=message, **kwargs)
         response = await self._request("POST", "/chat", data=request)
         return ChatResponse(**response)
-        
+
     async def chat(
         self,
         message: str,
@@ -204,7 +219,7 @@ class PupClient:
             include_reasoning=include_reasoning,
             auto_execute=auto_execute,
         )
-        
+
     # File operation methods
     async def list_files(
         self,
@@ -219,12 +234,12 @@ class PupClient:
         )
         response = await self._request("POST", "/files", data=operation)
         result = FileOperationResult(**response)
-        
+
         if not result.success:
             raise PupError(result.error or "File listing failed")
-            
+
         return result.files or []
-        
+
     async def read_file(
         self,
         file_path: str,
@@ -240,12 +255,12 @@ class PupClient:
         )
         response = await self._request("POST", "/files", data=operation)
         result = FileOperationResult(**response)
-        
+
         if not result.success:
             raise PupError(result.error or "File read failed")
-            
+
         return result.content or ""
-        
+
     async def write_file(
         self,
         file_path: str,
@@ -261,12 +276,12 @@ class PupClient:
         )
         response = await self._request("POST", "/files", data=operation)
         result = FileOperationResult(**response)
-        
+
         if not result.success:
             raise PupError(result.error or "File write failed")
-            
+
         return True
-        
+
     async def delete_file(self, file_path: str) -> bool:
         """Delete a file."""
         operation = FileOperation(
@@ -275,12 +290,12 @@ class PupClient:
         )
         response = await self._request("POST", "/files", data=operation)
         result = FileOperationResult(**response)
-        
+
         if not result.success:
             raise PupError(result.error or "File deletion failed")
-            
+
         return True
-        
+
     async def search_files(
         self,
         search_string: str,
@@ -293,10 +308,10 @@ class PupClient:
             "directory": directory,
             "max_results": max_results,
         }
-        
+
         response = await self._request("GET", "/search", params=params)
         return [SearchResult(**item) for item in response.get("results", [])]
-        
+
     # Shell command methods
     async def run_command(
         self,
@@ -314,7 +329,7 @@ class PupClient:
         )
         response = await self._request("POST", "/shell", data=shell_cmd)
         return ShellCommandResult(**response)
-        
+
     # Agent methods
     async def invoke_agent(
         self,
@@ -330,91 +345,135 @@ class PupClient:
         )
         response = await self._request("POST", "/agents", data=request)
         return AgentResponse(**response)
-        
+
     async def list_agents(self) -> List[str]:
         """List available agents."""
         response = await self._request("GET", "/agents")
         return response.get("agents", [])
-        
+
     # Utility methods
     async def get_capabilities(self) -> List[str]:
         """Get list of Alberto's capabilities."""
         status = await self.get_status()
         return [cap.name for cap in status.capabilities if cap.enabled]
-        
+
     async def wait_until_ready(self, timeout: int = 60) -> bool:
         """Wait until Alberto is ready."""
         start_time = asyncio.get_event_loop().time()
-        
+
         while True:
             if await self.health_check():
                 return True
-                
+
             if asyncio.get_event_loop().time() - start_time > timeout:
                 return False
-                
+
             await asyncio.sleep(1)
-            
+
+    # -------------------------------------------------------------------------
+    # Construction helpers
+    # -------------------------------------------------------------------------
     @classmethod
     async def create_and_connect(
         cls,
-        base_url: str = "http://localhost:8080",
+        base_url: Optional[str] = None,
         api_key: Optional[str] = None,
         model: Optional[str] = None,
         timeout: int = 60,
     ) -> "PupClient":
-        """Create and connect a client instance."""
+        """
+        Create and connect a client instance.
+
+        Order of precedence for the backend URL:
+        1. ALBERTO_API_URL environment variable (Hugging Face / cloud).
+        2. PUP_BACKEND_URL environment variable (optional legacy name).
+        3. base_url argument.
+        4. Default http://localhost:8080
+        """
+        # Backend URL from env or arg
+        backend_url = (
+            os.environ.get("ALBERTO_API_URL")
+            or os.environ.get("PUP_BACKEND_URL")
+            or base_url
+            or "http://localhost:8080"
+        )
+
         # Read API keys from environment if not provided
         if not api_key:
             syn_key = os.environ.get("SYN_API_KEY")
             openai_key = os.environ.get("OPEN_API_KEY")
-            
-            if syn_key:
+
+            syn_key_valid = syn_key and syn_key.strip()
+            openai_key_valid = openai_key and openai_key.strip()
+
+            if syn_key_valid:
                 api_key = syn_key
                 logger.info("Using Syn provider")
-            elif openai_key:
+            elif openai_key_valid:
                 api_key = openai_key
                 logger.info("Using OpenAI provider")
             else:
-                raise ValueError("No model API key configured. Set SYN_API_KEY or OPEN_API_KEY environment variable.")
-        
-        client = cls(base_url=base_url, api_key=api_key, timeout=timeout)
+                raise ValueError(
+                    "No model API key configured. "
+                    "Set SYN_API_KEY or OPEN_API_KEY environment variable."
+                )
+
+        client = cls(base_url=backend_url, api_key=api_key, timeout=timeout)
         await client.connect()
         return client
-        
+
     @classmethod
     def from_env(
         cls,
-        base_url: str = "http://localhost:8080",
+        base_url: Optional[str] = None,
         timeout: int = 60,
     ) -> "PupClient":
-        """Create client instance from environment variables (secure, no logging)."""
+        """
+        Create client instance from environment variables (secure, no logging).
+
+        Order of precedence for the backend URL:
+        1. ALBERTO_API_URL environment variable (Hugging Face / cloud).
+        2. PUP_BACKEND_URL environment variable (optional legacy name).
+        3. base_url argument.
+        4. Default http://localhost:8080
+
+        Demo mode is enabled only when no valid SYN_API_KEY or OPEN_API_KEY
+        is present; otherwise the client runs in full mode.
+        """
+        # Backend URL: prefer env vars, then explicit arg, then default localhost
+        backend_url = (
+            os.environ.get("ALBERTO_API_URL")
+            or os.environ.get("PUP_BACKEND_URL")
+            or base_url
+            or "http://localhost:8080"
+        )
+
         syn_key = os.environ.get("SYN_API_KEY")
         openai_key = os.environ.get("OPEN_API_KEY")
-        
+
         # Check for valid keys (not empty strings)
         has_syn_key = syn_key and syn_key.strip()
         has_openai_key = openai_key and openai_key.strip()
-        
+
         if has_syn_key:
             return cls(
-                base_url=base_url,
+                base_url=backend_url,
                 api_key=syn_key,
                 timeout=timeout,
-                demo_mode=False
+                demo_mode=False,
             )
         elif has_openai_key:
             return cls(
-                base_url=base_url,
+                base_url=backend_url,
                 api_key=openai_key,
                 timeout=timeout,
-                demo_mode=False
+                demo_mode=False,
             )
         else:
             # Demo mode when no keys available
             return cls(
-                base_url=base_url,
+                base_url=backend_url,
                 api_key=None,
                 timeout=timeout,
-                demo_mode=True
+                demo_mode=True,
             )
