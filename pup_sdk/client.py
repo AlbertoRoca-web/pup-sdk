@@ -52,7 +52,7 @@ class PupClient:
         self._cache_timestamp: Optional[datetime] = None
         self.demo_mode = demo_mode
 
-        # Cloudflare Access integration (optional)
+        # Optional Cloudflare Access support:
         # - PUP_CF_ACCESS_JWT: raw JWT to send as CF-Access-Jwt-Assertion
         # - PUP_CF_ACCESS_CLIENT_ID / PUP_CF_ACCESS_CLIENT_SECRET: service token pair
         self._cf_access_jwt: Optional[str] = os.environ.get("PUP_CF_ACCESS_JWT")
@@ -61,8 +61,8 @@ class PupClient:
             "PUP_CF_ACCESS_CLIENT_SECRET"
         )
 
-        # Simple flag: "connected" means we have an API key and are not explicitly in demo mode
-        self._is_connected = bool(api_key) and not demo_mode
+        # "Connected" just means we opened an HTTP session successfully.
+        self._is_connected: bool = False
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -79,7 +79,9 @@ class PupClient:
         """
         headers: Dict[str, str] = {"Content-Type": "application/json"}
 
-        # Core API auth (OpenAI / Syn key)
+        # Core API auth – used only when talking directly to a provider.
+        # When calling a remote Pup backend (Cloudflare Worker, etc.),
+        # self.api_key is normally None.
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
@@ -123,11 +125,11 @@ class PupClient:
             timeout=self.timeout,
         )
 
-        # Mark as connected - simple flag flip only
         self._is_connected = True
 
         has_cf = bool(
-            self._cf_access_jwt or (self._cf_client_id and self._cf_client_secret)
+            self._cf_access_jwt
+            or (self._cf_client_id and self._cf_client_secret)
         )
         logger.info(
             "🐕 Connected client session for Alberto at %s (Cloudflare Access=%s)",
@@ -141,11 +143,9 @@ class PupClient:
             return False
 
         try:
-            # Simple health check with timeout - no status call to avoid recursion
             timeout = aiohttp.ClientTimeout(total=5)
             async with aiohttp.ClientSession(timeout=timeout) as test_session:
                 headers = self._build_headers()
-
                 async with test_session.get(
                     f"{self.base_url}/health",
                     headers=headers,
@@ -198,9 +198,9 @@ class PupClient:
         params: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Make an HTTP request to Alberto's API."""
-        try:
-            url = f"/api/v1{endpoint}"
+        url = f"/api/v1{endpoint}"
 
+        try:
             if isinstance(data, BaseModel):
                 data = data.model_dump()
 
@@ -217,7 +217,14 @@ class PupClient:
                 if response.status >= 500:
                     raise PupConnectionError(f"Server error: {response.status}")
 
-                response_data = await response.json()
+                # Parse JSON, or raise a helpful error if it isn't JSON
+                try:
+                    response_data = await response.json()
+                except Exception as e:
+                    text = await response.text()
+                    raise PupError(
+                        f"Non-JSON response from backend (status={response.status}): {text}"
+                    ) from e
 
                 if response.status >= 400:
                     error_msg = response_data.get("error", "Unknown error")
@@ -465,7 +472,6 @@ class PupClient:
         3. base_url argument.
         4. Default http://localhost:8080
         """
-        # Backend URL from env or arg
         backend_url = (
             os.environ.get("ALBERTO_API_URL")
             or os.environ.get("PUP_BACKEND_URL")
@@ -473,7 +479,19 @@ class PupClient:
             or "http://localhost:8080"
         )
 
-        # Read API keys from environment if not provided
+        # If a remote Pup backend URL is provided, treat it as authoritative:
+        # the backend (e.g. Cloudflare Worker) holds the provider keys.
+        if os.environ.get("ALBERTO_API_URL") or os.environ.get("PUP_BACKEND_URL"):
+            client = cls(
+                base_url=backend_url,
+                api_key=None,
+                timeout=timeout,
+                demo_mode=False,
+            )
+            await client.connect()
+            return client
+
+        # Otherwise fall back to direct provider mode.
         if not api_key:
             syn_key = os.environ.get("SYN_API_KEY")
             openai_key = os.environ.get("OPEN_API_KEY")
@@ -481,29 +499,24 @@ class PupClient:
             syn_key_valid = syn_key and syn_key.strip()
             openai_key_valid = openai_key and openai_key.strip()
 
-            # Optional override: PUP_PROVIDER=openai|syn
-            provider_pref = (os.environ.get("PUP_PROVIDER") or "").lower()
-
-            if provider_pref == "syn" and syn_key_valid:
+            if syn_key_valid:
                 api_key = syn_key
-                logger.info("Using Syn provider (PUP_PROVIDER)")
-            elif provider_pref == "openai" and openai_key_valid:
-                api_key = openai_key
-                logger.info("Using OpenAI provider (PUP_PROVIDER)")
-            # Default: prefer OpenAI (matches Cloudflare Worker backend usage)
+                logger.info("Using Syn provider")
             elif openai_key_valid:
                 api_key = openai_key
-                logger.info("Using OpenAI provider (default)")
-            elif syn_key_valid:
-                api_key = syn_key
-                logger.info("Using Syn provider (fallback)")
+                logger.info("Using OpenAI provider")
             else:
                 raise ValueError(
                     "No model API key configured. "
                     "Set SYN_API_KEY or OPEN_API_KEY environment variable."
                 )
 
-        client = cls(base_url=backend_url, api_key=api_key, timeout=timeout)
+        client = cls(
+            base_url=backend_url,
+            api_key=api_key,
+            timeout=timeout,
+            demo_mode=False,
+        )
         await client.connect()
         return client
 
@@ -522,10 +535,17 @@ class PupClient:
         3. base_url argument.
         4. Default http://localhost:8080
 
-        Demo mode is enabled only when no valid SYN_API_KEY or OPEN_API_KEY
-        is present; otherwise the client runs in full mode.
+        Two modes:
+
+        1) Remote Pup backend mode (recommended for Hugging Face + Cloudflare Worker):
+           - ALBERTO_API_URL or PUP_BACKEND_URL is set.
+           - This client does NOT need OpenAI/Syn keys; the backend owns them.
+           - demo_mode is False regardless of provider keys.
+
+        2) Direct provider mode (no external backend URL):
+           - Uses SYN_API_KEY / OPEN_API_KEY to call providers directly.
+           - demo_mode=True only when no valid keys are present.
         """
-        # Backend URL: prefer env vars, then explicit arg, then default localhost
         backend_url = (
             os.environ.get("ALBERTO_API_URL")
             or os.environ.get("PUP_BACKEND_URL")
@@ -533,31 +553,35 @@ class PupClient:
             or "http://localhost:8080"
         )
 
+        # --- Mode 1: Remote Pup backend ---------------------------------
+        if os.environ.get("ALBERTO_API_URL") or os.environ.get("PUP_BACKEND_URL"):
+            # We intentionally ignore SYN_API_KEY / OPEN_API_KEY here:
+            # those belong on the backend (Cloudflare Worker).
+            return cls(
+                base_url=backend_url,
+                api_key=None,
+                timeout=timeout,
+                demo_mode=False,
+            )
+
+        # --- Mode 2: Direct provider ------------------------------------
         syn_key = os.environ.get("SYN_API_KEY")
         openai_key = os.environ.get("OPEN_API_KEY")
-        provider_pref = (os.environ.get("PUP_PROVIDER") or "").lower()
 
-        # Check for valid keys (not empty strings)
         has_syn_key = syn_key and syn_key.strip()
         has_openai_key = openai_key and openai_key.strip()
 
-        chosen_key: Optional[str] = None
-
-        # Respect explicit override first
-        if provider_pref == "syn" and has_syn_key:
-            chosen_key = syn_key
-        elif provider_pref == "openai" and has_openai_key:
-            chosen_key = openai_key
-        # Default behaviour: prefer OpenAI (matches Cloudflare Worker backend)
-        elif has_openai_key:
-            chosen_key = openai_key
-        elif has_syn_key:
-            chosen_key = syn_key
-
-        if chosen_key:
+        if has_syn_key:
             return cls(
                 base_url=backend_url,
-                api_key=chosen_key,
+                api_key=syn_key,
+                timeout=timeout,
+                demo_mode=False,
+            )
+        elif has_openai_key:
+            return cls(
+                base_url=backend_url,
+                api_key=openai_key,
                 timeout=timeout,
                 demo_mode=False,
             )
