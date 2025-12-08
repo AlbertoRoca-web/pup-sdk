@@ -56,9 +56,7 @@ class PupClient:
         # - PUP_CF_ACCESS_JWT: raw JWT to send as CF-Access-Jwt-Assertion
         # - PUP_CF_ACCESS_CLIENT_ID / PUP_CF_ACCESS_CLIENT_SECRET: service token pair
         self._cf_access_jwt: Optional[str] = os.environ.get("PUP_CF_ACCESS_JWT")
-        self._cf_client_id: Optional[str] = os.environ.get(
-            "PUP_CF_ACCESS_CLIENT_ID"
-        )
+        self._cf_client_id: Optional[str] = os.environ.get("PUP_CF_ACCESS_CLIENT_ID")
         self._cf_client_secret: Optional[str] = os.environ.get(
             "PUP_CF_ACCESS_CLIENT_SECRET"
         )
@@ -129,8 +127,7 @@ class PupClient:
         self._is_connected = True
 
         has_cf = bool(
-            self._cf_access_jwt
-            or (self._cf_client_id and self._cf_client_secret)
+            self._cf_access_jwt or (self._cf_client_id and self._cf_client_secret)
         )
         logger.info(
             "🐕 Connected client session for Alberto at %s (Cloudflare Access=%s)",
@@ -484,12 +481,22 @@ class PupClient:
             syn_key_valid = syn_key and syn_key.strip()
             openai_key_valid = openai_key and openai_key.strip()
 
-            if syn_key_valid:
+            # Optional override: PUP_PROVIDER=openai|syn
+            provider_pref = (os.environ.get("PUP_PROVIDER") or "").lower()
+
+            if provider_pref == "syn" and syn_key_valid:
                 api_key = syn_key
-                logger.info("Using Syn provider")
+                logger.info("Using Syn provider (PUP_PROVIDER)")
+            elif provider_pref == "openai" and openai_key_valid:
+                api_key = openai_key
+                logger.info("Using OpenAI provider (PUP_PROVIDER)")
+            # Default: prefer OpenAI (matches Cloudflare Worker backend usage)
             elif openai_key_valid:
                 api_key = openai_key
-                logger.info("Using OpenAI provider")
+                logger.info("Using OpenAI provider (default)")
+            elif syn_key_valid:
+                api_key = syn_key
+                logger.info("Using Syn provider (fallback)")
             else:
                 raise ValueError(
                     "No model API key configured. "
@@ -528,22 +535,29 @@ class PupClient:
 
         syn_key = os.environ.get("SYN_API_KEY")
         openai_key = os.environ.get("OPEN_API_KEY")
+        provider_pref = (os.environ.get("PUP_PROVIDER") or "").lower()
 
         # Check for valid keys (not empty strings)
         has_syn_key = syn_key and syn_key.strip()
         has_openai_key = openai_key and openai_key.strip()
 
-        if has_syn_key:
-            return cls(
-                base_url=backend_url,
-                api_key=syn_key,
-                timeout=timeout,
-                demo_mode=False,
-            )
+        chosen_key: Optional[str] = None
+
+        # Respect explicit override first
+        if provider_pref == "syn" and has_syn_key:
+            chosen_key = syn_key
+        elif provider_pref == "openai" and has_openai_key:
+            chosen_key = openai_key
+        # Default behaviour: prefer OpenAI (matches Cloudflare Worker backend)
         elif has_openai_key:
+            chosen_key = openai_key
+        elif has_syn_key:
+            chosen_key = syn_key
+
+        if chosen_key:
             return cls(
                 base_url=backend_url,
-                api_key=openai_key,
+                api_key=chosen_key,
                 timeout=timeout,
                 demo_mode=False,
             )
