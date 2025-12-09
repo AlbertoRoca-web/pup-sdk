@@ -50,8 +50,37 @@ def _force_live_backend() -> bool:
     return allow_keyless
 
 
-_REMOTE_BACKEND_URL = _remote_backend_url()
-_FORCE_LIVE_BACKEND = _force_live_backend()
+
+
+def _ensure_live_client(app: FastAPI) -> Optional[PupClient]:
+    """Ensure we have a live client when a remote backend is configured."""
+    client: Optional[PupClient] = getattr(app.state, "client", None)
+    remote_url = _remote_backend_url()
+    force_live = _force_live_backend()
+
+    if not force_live:
+        return client
+
+    normalized_remote = (remote_url or "").rstrip("/")
+    needs_refresh = (
+        client is None
+        or client.demo_mode
+        or client.base_url.rstrip("/") != normalized_remote
+    )
+
+    if not needs_refresh:
+        return client
+
+    try:
+        print("🔁 Refreshing PupClient for remote backend")
+        refreshed = PupClient.from_env(base_url=remote_url)
+        app.state.client = refreshed
+        global _pup_client
+        _pup_client = refreshed
+        return refreshed
+    except Exception as exc:
+        print(f"⚠️ Failed to refresh PupClient for remote backend: {exc}")
+        return client
 
 
 @asynccontextmanager
@@ -66,9 +95,12 @@ async def lifespan(app: FastAPI):
             client = PupClient.from_env()
             app.state.client = client
 
+        client = _ensure_live_client(app) or client
         _pup_client = client
 
-        if client.demo_mode and _FORCE_LIVE_BACKEND:
+        force_live = _force_live_backend()
+
+        if client.demo_mode and force_live:
             print("⚙️ Remote backend detected; forcing live mode even though PupClient reported demo.")
             client.demo_mode = False
 
@@ -86,7 +118,7 @@ async def lifespan(app: FastAPI):
             except Exception as connect_error:
                 print(f"⚠️ Failed to connect Alberto client: {connect_error}")
                 client._is_connected = False
-                if not _FORCE_LIVE_BACKEND:
+                if not force_live:
                     client.demo_mode = True
                     print("🔄 Falling back to demo mode due to connection failure")
                 else:
@@ -162,8 +194,9 @@ def create_app(client: Optional[PupClient] = None) -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     async def home(request: Request):
         """Serve the main web interface."""
-        client = getattr(app.state, "client", None)
-        demo_mode = not client or (client.demo_mode and not _FORCE_LIVE_BACKEND)
+        client = _ensure_live_client(app)
+        force_live = _force_live_backend()
+        demo_mode = not client or (client.demo_mode and not force_live)
         connected = bool(client and client.is_connected and not demo_mode)
 
         return templates.TemplateResponse(
@@ -179,16 +212,17 @@ def create_app(client: Optional[PupClient] = None) -> FastAPI:
     @app.post("/api/chat")
     async def chat_endpoint(request: ChatRequest):
         """Handle chat requests with demo fallback on all failures."""
-        client: Optional[PupClient] = getattr(app.state, "client", None)
+        client: Optional[PupClient] = _ensure_live_client(app)
+        force_live = _force_live_backend()
 
         if not client:
             return await _run_demo_chat(request)
 
-        if _FORCE_LIVE_BACKEND and client.demo_mode:
+        if force_live and client.demo_mode:
             client.demo_mode = False
 
         # (a) if demo mode (and no forced backend) return demo chat
-        if not _FORCE_LIVE_BACKEND and client.demo_mode:
+        if not force_live and client.demo_mode:
             return await _run_demo_chat(request)
 
         # (b) ensure connection
@@ -197,7 +231,7 @@ def create_app(client: Optional[PupClient] = None) -> FastAPI:
                 await client.connect()
             except Exception as exc:
                 client._is_connected = False
-                if not _FORCE_LIVE_BACKEND:
+                if not force_live:
                     client.demo_mode = True
                 print(f"Chat connect failed: {exc}")
                 return await _run_demo_chat(request)
@@ -214,14 +248,15 @@ def create_app(client: Optional[PupClient] = None) -> FastAPI:
         except (PupTimeoutError, PupConnectionError, PupError, Exception) as e:
             print(f"Chat failed, falling back to demo: {type(e).__name__}: {e}")
             client._is_connected = False
-            if not _FORCE_LIVE_BACKEND:
+            if not force_live:
                 client.demo_mode = True
             return await _run_demo_chat(request)
 
     @app.get("/api/status")
     async def status_endpoint():
         """Get Alberto's status with proper demo fallback."""
-        client: Optional[PupClient] = getattr(app.state, "client", None)
+        client: Optional[PupClient] = _ensure_live_client(app)
+        force_live = _force_live_backend()
 
         # (a) if client is None, return demo mode response
         if not client:
@@ -229,15 +264,15 @@ def create_app(client: Optional[PupClient] = None) -> FastAPI:
                 "available": False,
                 "version": "0.1.0",
                 "connected": False,
-                "demo_mode": not _FORCE_LIVE_BACKEND,
+                "demo_mode": not force_live,
                 "message": "No client available",
             }
 
-        if _FORCE_LIVE_BACKEND and client.demo_mode:
+        if force_live and client.demo_mode:
             client.demo_mode = False
 
         # (b) if client.demo_mode is True and no forced backend, return immediate demo response
-        if not _FORCE_LIVE_BACKEND and client.demo_mode:
+        if client.demo_mode and not force_live:
             return {
                 "available": True,
                 "version": "0.1.0",
@@ -252,7 +287,7 @@ def create_app(client: Optional[PupClient] = None) -> FastAPI:
                 await client.connect()
             except Exception as exc:
                 client._is_connected = False
-                if not _FORCE_LIVE_BACKEND:
+                if not force_live:
                     client.demo_mode = True
                     return {
                         "available": False,
@@ -276,13 +311,13 @@ def create_app(client: Optional[PupClient] = None) -> FastAPI:
             result.update(
                 {
                     "connected": client.is_connected and not client.demo_mode,
-                    "demo_mode": client.demo_mode and not _FORCE_LIVE_BACKEND,
+                    "demo_mode": client.demo_mode and not force_live,
                 }
             )
             return result
         except Exception as exc:
             client._is_connected = False
-            if not _FORCE_LIVE_BACKEND:
+            if not force_live:
                 client.demo_mode = True
                 return {
                     "available": False,
