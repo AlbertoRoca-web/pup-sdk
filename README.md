@@ -62,7 +62,17 @@ You can point the HuggingFace UI at the lightweight Cloudflare Worker in `src/wo
 3. Copy the Worker URL (e.g. `https://pup-sdk.your-name.workers.dev`).
 4. In HuggingFace Space settings set `ALBERTO_API_URL` to that Worker URL. No API key is required on HuggingFace anymore—the Worker keeps the secrets server-side.
 
-The updated PupClient automatically leaves demo mode whenever it sees a non-local backend URL, so the UI will start streaming real responses through your Worker as soon as the environment variable is saved.
+### Cloudflare Access ⚠️
+If you enable Cloudflare Access on the Worker URL, HuggingFace must present an Access token. You have two choices:
+
+- **Disable Cloudflare Access** for that Worker route (easiest) so the Space can reach it directly.
+- **Or** create a service token in Zero Trust and set these environment variables in HuggingFace:
+  - `PUP_CF_ACCESS_CLIENT_ID`
+  - `PUP_CF_ACCESS_CLIENT_SECRET`
+
+The Pup SDK automatically attaches those headers to every backend call. (You can also provide a raw JWT via `PUP_CF_ACCESS_JWT`.)
+
+The updated PupClient automatically leaves demo mode whenever it sees a non-local backend URL, so the UI will start streaming real responses through your Worker as soon as the environment variable is saved and the Worker is reachable.
 
 ## 🛠️ Technical Details
 

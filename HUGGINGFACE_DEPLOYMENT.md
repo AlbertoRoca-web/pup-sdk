@@ -76,7 +76,17 @@ Prefer to keep your LLM keys off HuggingFace entirely? Use the bundled Worker:
 3. Copy the Worker URL (e.g. `https://pup-sdk-demo.workers.dev`).
 4. Set `ALBERTO_API_URL` in your Space to that URL.
 
-Because the backend URL is non-local, the updated PupClient automatically switches out of demo mode even without a HuggingFace API key, and every chat request is proxied through your Worker which holds the real credentials.
+#### Cloudflare Access note
+If you flip on Cloudflare Access for that Worker, HuggingFace will see HTTP 403 and the UI will fall back to demo mode. Either:
+
+- Disable Access for the Worker route, **or**
+- Create a Zero Trust service token and set these HuggingFace env vars so the Pup SDK can authenticate:
+  - `PUP_CF_ACCESS_CLIENT_ID`
+  - `PUP_CF_ACCESS_CLIENT_SECRET`
+
+(Advanced: you can also set `PUP_CF_ACCESS_JWT` if you issue JWTs yourself.)
+
+Because the backend URL is non-local, the updated PupClient automatically switches out of demo mode even without a HuggingFace API key, *as long as the Worker is reachable with or without Cloudflare Access protection*.
 
 ## 🌟 Features Available
 
