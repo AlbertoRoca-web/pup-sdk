@@ -26,6 +26,33 @@ from ..types import ChatRequest, ChatResponse
 # Global client instance, used for /api/capabilities, /api/agents, /health
 _pup_client: Optional[PupClient] = None
 
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+_LOCAL_PREFIXES = (
+    "http://localhost",
+    "http://127.0.0.1",
+    "https://localhost",
+    "https://127.0.0.1",
+)
+
+
+def _remote_backend_url() -> Optional[str]:
+    return os.environ.get("ALBERTO_API_URL") or os.environ.get("PUP_BACKEND_URL")
+
+
+def _force_live_backend() -> bool:
+    url = _remote_backend_url()
+    if not url:
+        return False
+    allow_keyless = not url.startswith(_LOCAL_PREFIXES)
+    if not allow_keyless:
+        flag = (os.environ.get("PUP_ALLOW_KEYLESS_BACKEND") or "").strip().lower()
+        allow_keyless = flag in _TRUE_VALUES
+    return allow_keyless
+
+
+_REMOTE_BACKEND_URL = _remote_backend_url()
+_FORCE_LIVE_BACKEND = _force_live_backend()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -41,6 +68,10 @@ async def lifespan(app: FastAPI):
 
         _pup_client = client
 
+        if client.demo_mode and _FORCE_LIVE_BACKEND:
+            print("⚙️ Remote backend detected; forcing live mode even though PupClient reported demo.")
+            client.demo_mode = False
+
         if client.demo_mode:
             print("🐕 Alberto running in demo mode - no API key configured")
         else:
@@ -54,10 +85,14 @@ async def lifespan(app: FastAPI):
                 print("🐕 Alberto client connected successfully!")
             except Exception as connect_error:
                 print(f"⚠️ Failed to connect Alberto client: {connect_error}")
-                # Fall back to demo mode on connection failure
-                client.demo_mode = True
                 client._is_connected = False
-                print("🔄 Falling back to demo mode due to connection failure")
+                if not _FORCE_LIVE_BACKEND:
+                    client.demo_mode = True
+                    print("🔄 Falling back to demo mode due to connection failure")
+                else:
+                    print(
+                        "🔁 Remote backend configured; staying in live mode and will retry per request."
+                    )
 
         # Hand control back to FastAPI
         yield
@@ -128,8 +163,8 @@ def create_app(client: Optional[PupClient] = None) -> FastAPI:
     async def home(request: Request):
         """Serve the main web interface."""
         client = getattr(app.state, "client", None)
-        connected = bool(client and client.is_connected and not client.demo_mode)
-        demo_mode = not client or client.demo_mode
+        demo_mode = not client or (client.demo_mode and not _FORCE_LIVE_BACKEND)
+        connected = bool(client and client.is_connected and not demo_mode)
 
         return templates.TemplateResponse(
             "index.html",
@@ -146,18 +181,25 @@ def create_app(client: Optional[PupClient] = None) -> FastAPI:
         """Handle chat requests with demo fallback on all failures."""
         client: Optional[PupClient] = getattr(app.state, "client", None)
 
-        # (a) if no client or demo mode, return demo chat
-        if not client or client.demo_mode:
+        if not client:
             return await _run_demo_chat(request)
 
-        # (b) if live client but not connected, try to connect and fallback to demo on failure
+        if _FORCE_LIVE_BACKEND and client.demo_mode:
+            client.demo_mode = False
+
+        # (a) if demo mode (and no forced backend) return demo chat
+        if not _FORCE_LIVE_BACKEND and client.demo_mode:
+            return await _run_demo_chat(request)
+
+        # (b) ensure connection
         if not client.is_connected:
             try:
                 await client.connect()
-            except Exception:
-                # Flip to demo mode on connection failure
-                client.demo_mode = True
+            except Exception as exc:
                 client._is_connected = False
+                if not _FORCE_LIVE_BACKEND:
+                    client.demo_mode = True
+                print(f"Chat connect failed: {exc}")
                 return await _run_demo_chat(request)
 
         # (c) try live chat, fallback to demo on any exception
@@ -170,10 +212,10 @@ def create_app(client: Optional[PupClient] = None) -> FastAPI:
             )
             return response
         except (PupTimeoutError, PupConnectionError, PupError, Exception) as e:
-            # Log short message and flip to demo mode on any failure
-            print(f"Chat failed, falling back to demo: {type(e).__name__}")
-            client.demo_mode = True
+            print(f"Chat failed, falling back to demo: {type(e).__name__}: {e}")
             client._is_connected = False
+            if not _FORCE_LIVE_BACKEND:
+                client.demo_mode = True
             return await _run_demo_chat(request)
 
     @app.get("/api/status")
@@ -187,12 +229,15 @@ def create_app(client: Optional[PupClient] = None) -> FastAPI:
                 "available": False,
                 "version": "0.1.0",
                 "connected": False,
-                "demo_mode": True,
+                "demo_mode": not _FORCE_LIVE_BACKEND,
                 "message": "No client available",
             }
 
-        # (b) if client.demo_mode is True, return immediate demo response
-        if client.demo_mode:
+        if _FORCE_LIVE_BACKEND and client.demo_mode:
+            client.demo_mode = False
+
+        # (b) if client.demo_mode is True and no forced backend, return immediate demo response
+        if not _FORCE_LIVE_BACKEND and client.demo_mode:
             return {
                 "available": True,
                 "version": "0.1.0",
@@ -201,14 +246,44 @@ def create_app(client: Optional[PupClient] = None) -> FastAPI:
                 "message": "Running in demo mode",
             }
 
-        # (c) if not client.is_connected, try to connect and fallback to demo on failure
+        # (c) if not client.is_connected, try to connect and fallback appropriately
         if not client.is_connected:
             try:
                 await client.connect()
-            except Exception:
-                # Flip to demo mode on any connection failure
-                client.demo_mode = True
+            except Exception as exc:
                 client._is_connected = False
+                if not _FORCE_LIVE_BACKEND:
+                    client.demo_mode = True
+                    return {
+                        "available": False,
+                        "version": "0.1.0",
+                        "connected": False,
+                        "demo_mode": True,
+                        "error": "connection_failed",
+                    }
+                return {
+                    "available": False,
+                    "version": "0.1.0",
+                    "connected": False,
+                    "demo_mode": False,
+                    "error": f"connection_failed: {exc}",
+                }
+
+        # (d) try to get status, fallback appropriately
+        try:
+            status = await client.get_status()
+            result = status.model_dump()
+            result.update(
+                {
+                    "connected": client.is_connected and not client.demo_mode,
+                    "demo_mode": client.demo_mode and not _FORCE_LIVE_BACKEND,
+                }
+            )
+            return result
+        except Exception as exc:
+            client._is_connected = False
+            if not _FORCE_LIVE_BACKEND:
+                client.demo_mode = True
                 return {
                     "available": False,
                     "version": "0.1.0",
@@ -216,29 +291,12 @@ def create_app(client: Optional[PupClient] = None) -> FastAPI:
                     "demo_mode": True,
                     "error": "connection_failed",
                 }
-
-        # (d) try to get status, fallback to demo on any exception
-        try:
-            status = await client.get_status()
-            result = status.model_dump()
-            # Only return connected:true when everything is working
-            result.update(
-                {
-                    "connected": client.is_connected and not client.demo_mode,
-                    "demo_mode": client.demo_mode,
-                }
-            )
-            return result
-        except Exception:
-            # Flip to demo mode on any status failure
-            client.demo_mode = True
-            client._is_connected = False
             return {
                 "available": False,
                 "version": "0.1.0",
                 "connected": False,
-                "demo_mode": True,
-                "error": "connection_failed",
+                "demo_mode": False,
+                "error": f"connection_failed: {exc}",
             }
 
     @app.get("/api/capabilities")
