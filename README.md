@@ -44,6 +44,26 @@ docker run -it -p 7860:7860 --platform=linux/amd64 \n  -e OPEN_API_KEY="YOUR_OPE
 
 This starts the official HuggingFace image but with your real keys, so Alberto will have full functionality instead of running in demo mode.
 
+## 🌩️ Cloudflare Worker backend (keep keys off HuggingFace)
+
+You can point the HuggingFace UI at the lightweight Cloudflare Worker in `src/worker.mjs`:
+
+1. Install Wrangler and deploy the worker:
+   ```bash
+   npm install -g wrangler
+   cd pup-sdk
+   wrangler deploy
+   ```
+2. In Cloudflare, add your `OPEN_API_KEY` (and/or `SYN_API_KEY`) as Worker secrets:
+   ```bash
+   wrangler secret put OPEN_API_KEY
+   wrangler secret put SYN_API_KEY   # optional fallback
+   ```
+3. Copy the Worker URL (e.g. `https://pup-sdk.your-name.workers.dev`).
+4. In HuggingFace Space settings set `ALBERTO_API_URL` to that Worker URL. No API key is required on HuggingFace anymore—the Worker keeps the secrets server-side.
+
+The updated PupClient automatically leaves demo mode whenever it sees a non-local backend URL, so the UI will start streaming real responses through your Worker as soon as the environment variable is saved.
+
 ## 🛠️ Technical Details
 
 This deployment uses:

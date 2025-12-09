@@ -535,14 +535,15 @@ class PupClient:
         3. base_url argument.
         4. Default http://localhost:8080
 
-        Two modes:
+        There are two broad modes:
 
-        1) Remote Pup backend mode (recommended for Hugging Face + Cloudflare Worker):
-           - ALBERTO_API_URL or PUP_BACKEND_URL is set.
-           - This client does NOT need OpenAI/Syn keys; the backend owns them.
-           - demo_mode is False regardless of provider keys.
+        1) Remote Pup backend (Cloudflare Worker, bridge server, etc.).
+           - Triggered when ALBERTO_API_URL/PUP_BACKEND_URL is set or when a
+             non-local backend URL is provided with PUP_ALLOW_KEYLESS_BACKEND.
+           - The worker/bridge owns the provider keys, so this client does not
+             need OPEN_API_KEY/SYN_API_KEY and demo_mode stays False.
 
-        2) Direct provider mode (no external backend URL):
+        2) Direct provider mode (no remote backend URL):
            - Uses SYN_API_KEY / OPEN_API_KEY to call providers directly.
            - demo_mode=True only when no valid keys are present.
         """
@@ -555,8 +556,6 @@ class PupClient:
 
         # --- Mode 1: Remote Pup backend ---------------------------------
         if os.environ.get("ALBERTO_API_URL") or os.environ.get("PUP_BACKEND_URL"):
-            # We intentionally ignore SYN_API_KEY / OPEN_API_KEY here:
-            # those belong on the backend (Cloudflare Worker).
             return cls(
                 base_url=backend_url,
                 api_key=None,
@@ -567,29 +566,56 @@ class PupClient:
         # --- Mode 2: Direct provider ------------------------------------
         syn_key = os.environ.get("SYN_API_KEY")
         openai_key = os.environ.get("OPEN_API_KEY")
+        provider_pref = (os.environ.get("PUP_PROVIDER") or "").lower()
 
         has_syn_key = syn_key and syn_key.strip()
         has_openai_key = openai_key and openai_key.strip()
 
-        if has_syn_key:
-            return cls(
-                base_url=backend_url,
-                api_key=syn_key,
-                timeout=timeout,
-                demo_mode=False,
-            )
+        chosen_key: Optional[str] = None
+        if provider_pref == "syn" and has_syn_key:
+            chosen_key = syn_key
+        elif provider_pref == "openai" and has_openai_key:
+            chosen_key = openai_key
         elif has_openai_key:
+            chosen_key = openai_key
+        elif has_syn_key:
+            chosen_key = syn_key
+
+        if chosen_key:
             return cls(
                 base_url=backend_url,
-                api_key=openai_key,
+                api_key=chosen_key,
                 timeout=timeout,
                 demo_mode=False,
             )
-        else:
-            # Demo mode when no keys available
+
+        local_prefixes = (
+            "http://localhost",
+            "http://127.0.0.1",
+            "https://localhost",
+            "https://127.0.0.1",
+        )
+        backend_is_local = backend_url.startswith(local_prefixes)
+        allow_keyless_backend = (
+            not backend_is_local
+            or (os.environ.get("PUP_ALLOW_KEYLESS_BACKEND") or "")
+            .strip()
+            .lower()
+            in {"1", "true", "yes", "on"}
+        )
+
+        if allow_keyless_backend:
             return cls(
                 base_url=backend_url,
                 api_key=None,
                 timeout=timeout,
-                demo_mode=True,
+                demo_mode=False,
             )
+
+        # Demo mode when running locally with no API keys configured
+        return cls(
+            base_url=backend_url,
+            api_key=None,
+            timeout=timeout,
+            demo_mode=True,
+        )

@@ -58,6 +58,26 @@ python bridge_server.py
 2. **Set the ALBERTO_API_URL** in your Space settings to point to your bridge server
 3. **Restart your Space** to connect!
 
+### **Cloudflare Worker option (no keys on HuggingFace)**
+
+Prefer to keep your LLM keys off HuggingFace entirely? Use the bundled Worker:
+
+1. Deploy the worker:
+   ```bash
+   npm install -g wrangler
+   cd pup-sdk
+   wrangler deploy
+   ```
+2. Store your provider keys as Worker secrets:
+   ```bash
+   wrangler secret put OPEN_API_KEY
+   wrangler secret put SYN_API_KEY   # optional
+   ```
+3. Copy the Worker URL (e.g. `https://pup-sdk-demo.workers.dev`).
+4. Set `ALBERTO_API_URL` in your Space to that URL.
+
+Because the backend URL is non-local, the updated PupClient automatically switches out of demo mode even without a HuggingFace API key, and every chat request is proxied through your Worker which holds the real credentials.
+
 ## 🌟 Features Available
 
 ### **Demo Mode (Works Out of the Box)**

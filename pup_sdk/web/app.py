@@ -44,7 +44,10 @@ async def lifespan(app: FastAPI):
         if client.demo_mode:
             print("🐕 Alberto running in demo mode - no API key configured")
         else:
-            print("🐕 Alberto client created with API key")
+            if getattr(client, "api_key", None):
+                print("🐕 Alberto client created with API key")
+            else:
+                print("🐕 Alberto client created without API key (keyless backend)")
             print(f"🔗 Alberto backend URL: {client.base_url}")
             try:
                 await client.connect()
