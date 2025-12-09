@@ -4,10 +4,12 @@ import asyncio
 import json
 import logging
 import os
+import socket
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
 import aiohttp
+from aiohttp import resolver
 from pydantic import BaseModel
 
 from .exceptions import (
@@ -33,6 +35,47 @@ from .types import (
 logger = logging.getLogger(__name__)
 
 
+def _parse_resolve_overrides(raw: Optional[str]) -> Dict[str, str]:
+    if not raw:
+        return {}
+    overrides: Dict[str, str] = {}
+    for chunk in raw.split(","):
+        if "=" not in chunk:
+            continue
+        host, ip = chunk.split("=", 1)
+        host = host.strip()
+        ip = ip.strip()
+        if host and ip:
+            overrides[host] = ip
+    return overrides
+
+
+class StaticResolver(resolver.AbstractResolver):
+    """Resolver that injects manual host→IP overrides before falling back."""
+
+    def __init__(self, overrides: Optional[Dict[str, str]] = None):
+        self._overrides = overrides or {}
+        self._fallback = resolver.DefaultResolver()
+
+    async def resolve(self, host, port=0, family=socket.AF_INET):
+        override = self._overrides.get(host)
+        if override:
+            return [
+                {
+                    "hostname": host,
+                    "host": override,
+                    "port": port,
+                    "family": socket.AF_INET,
+                    "proto": 0,
+                    "flags": 0,
+                }
+            ]
+        return await self._fallback.resolve(host, port, family)
+
+    async def close(self):
+        await self._fallback.close()
+
+
 class PupClient:
     """Async client for interacting with Alberto the code puppy."""
 
@@ -48,6 +91,9 @@ class PupClient:
         self.api_key = api_key
         self.timeout = aiohttp.ClientTimeout(total=timeout)
         self._session: Optional[aiohttp.ClientSession] = None
+        self._resolver_overrides = _parse_resolve_overrides(
+            os.environ.get("PUP_RESOLVE_OVERRIDES"))
+        self._resolver: Optional[StaticResolver] = None
         self._status_cache: Optional[PupStatus] = None
         self._cache_timestamp: Optional[datetime] = None
         self.demo_mode = demo_mode
@@ -119,10 +165,15 @@ class PupClient:
 
         headers = self._build_headers()
 
+        self._resolver = StaticResolver(self._resolver_overrides)
+
+        connector = aiohttp.TCPConnector(resolver=self._resolver)
+
         self._session = aiohttp.ClientSession(
             base_url=self.base_url,
             headers=headers,
             timeout=self.timeout,
+            connector=connector,
         )
 
         self._is_connected = True
@@ -173,6 +224,9 @@ class PupClient:
             self._session = None
             self._is_connected = False
             logger.info("🐕 Disconnected from Alberto")
+        if self._resolver:
+            await self._resolver.close()
+            self._resolver = None
 
     @property
     def is_connected(self) -> bool:
@@ -479,6 +533,18 @@ class PupClient:
             or "http://localhost:8080"
         )
 
+        if os.environ.get("PUP_RESOLVE_OVERRIDES"):
+            logger.info(
+                "Using manual DNS override(s): %s",
+                os.environ.get("PUP_RESOLVE_OVERRIDES"),
+            )
+
+        if os.environ.get("PUP_RESOLVE_OVERRIDES"):
+            logger.info(
+                "Using manual DNS override(s): %s",
+                os.environ.get("PUP_RESOLVE_OVERRIDES"),
+            )
+
         # If a remote Pup backend URL is provided, treat it as authoritative:
         # the backend (e.g. Cloudflare Worker) holds the provider keys.
         if os.environ.get("ALBERTO_API_URL") or os.environ.get("PUP_BACKEND_URL"):
@@ -553,6 +619,18 @@ class PupClient:
             or base_url
             or "http://localhost:8080"
         )
+
+        if os.environ.get("PUP_RESOLVE_OVERRIDES"):
+            logger.info(
+                "Using manual DNS override(s): %s",
+                os.environ.get("PUP_RESOLVE_OVERRIDES"),
+            )
+
+        if os.environ.get("PUP_RESOLVE_OVERRIDES"):
+            logger.info(
+                "Using manual DNS override(s): %s",
+                os.environ.get("PUP_RESOLVE_OVERRIDES"),
+            )
 
         # --- Mode 1: Remote Pup backend ---------------------------------
         if os.environ.get("ALBERTO_API_URL") or os.environ.get("PUP_BACKEND_URL"):

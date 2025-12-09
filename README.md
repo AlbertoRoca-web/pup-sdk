@@ -72,6 +72,13 @@ If you enable Cloudflare Access on the Worker URL, HuggingFace must present an A
 
 The Pup SDK automatically attaches those headers to every backend call. (You can also provide a raw JWT via `PUP_CF_ACCESS_JWT`.)
 
+### DNS overrides (when HuggingFace can't resolve workers.dev)
+Some HuggingFace regions can’t resolve `*.workers.dev`. Add a manual mapping with:
+```
+PUP_RESOLVE_OVERRIDES=pup-sdk.alroca308.workers.dev=104.21.50.6
+```
+(You can provide multiple `host=ip` pairs separated by commas.) The client injects those IPs directly into the resolver, so TLS still uses the correct hostname while the socket connects to the specified address.
+
 The updated PupClient automatically leaves demo mode whenever it sees a non-local backend URL, so the UI will start streaming real responses through your Worker as soon as the environment variable is saved and the Worker is reachable.
 
 ## 🛠️ Technical Details

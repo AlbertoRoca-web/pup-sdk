@@ -86,6 +86,13 @@ If you flip on Cloudflare Access for that Worker, HuggingFace will see HTTP 403 
 
 (Advanced: you can also set `PUP_CF_ACCESS_JWT` if you issue JWTs yourself.)
 
+#### DNS override note
+Some HuggingFace regions can’t resolve `*.workers.dev`. Add:
+```
+PUP_RESOLVE_OVERRIDES=pup-sdk.alroca308.workers.dev=104.21.50.6
+```
+(Comma separate multiple entries.) The resolver will short-circuit DNS but still present the correct hostname for TLS.
+
 Because the backend URL is non-local, the updated PupClient automatically switches out of demo mode even without a HuggingFace API key, *as long as the Worker is reachable with or without Cloudflare Access protection*.
 
 ## 🌟 Features Available
