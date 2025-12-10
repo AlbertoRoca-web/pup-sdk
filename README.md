@@ -18,7 +18,9 @@ puppy" directly inside your Android apps.
 pup-sdk/
 ├── build.gradle.kts              # Root Gradle build config
 ├── gradle.properties
-├── settings.gradle.kts           # Declares the :sdk module
+├── settings.gradle.kts           # Declares :sdk and :app modules
+├── app/                          # Runnable demo app (Jetpack Compose)
+│   └── src/main/java/com/...     # MainActivity + theme
 ├── sdk/                          # Android library module
 │   ├── build.gradle.kts
 │   └── src/main/java/...         # Kotlin sources
@@ -31,12 +33,17 @@ pup-sdk/
    - `File → Open…` and choose the `pup-sdk` directory
    - Studio will download the Gradle wrapper on first sync
 
-2. **Publish to MavenLocal (optional)**
+2. **Run the demo app**
+   - In Android Studio, select the `app` run configuration and click ▶️
+   - The Compose UI lets you check backend status and send a chat message with
+     no extra configuration
+
+3. **Publish the SDK to MavenLocal (optional)**
    ```bash
    ./gradlew publishToMavenLocal
    ```
 
-3. **Use in your app**
+4. **Use the SDK in your own app**
    ```kotlin
    val client = PupClient(
        config = PupClientConfig(

@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "pup-sdk-android"
 include(":sdk")
+include(":app")
